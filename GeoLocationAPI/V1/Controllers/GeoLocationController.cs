@@ -1,25 +1,26 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Net.Sockets;
-using System.Threading.Tasks;
+﻿using GeoLocationAPI.V1.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using GeoLocationAPI.Models;
-using MaxMind.GeoIP2;
-using GeoLocationAPI.Services;
 
 namespace GeoLocationAPI.Controllers
 {
+    /// <summary>
+    /// API for retrieving GeoLocations
+    /// </summary>
     [ApiController]
-    [Route("api/[controller]")]
+    [ApiVersion( "1.0" )]
+    [Route( "api/v{version:apiVersion}/[controller]" )]
+    //[Route("api/[controller]")]
     public class GeoLocationController : ControllerBase
     {        
         
         private readonly ILogger _logger;
         private readonly IGeoLocationService _geoLocationService;
-
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="geoLocationService"></param>
+        /// <param name="logger"></param>
         public GeoLocationController(
             IGeoLocationService geoLocationService,
             ILogger<GeoLocationController> logger
@@ -30,31 +31,26 @@ namespace GeoLocationAPI.Controllers
             _logger = logger;
         }
 
-        // GET: api/GeoLocation
+        /// <summary>
+        /// Get the GeoLocation for the user's IPAddress
+        /// </summary>
+        /// <response code="200"></response>
         [HttpGet]
         public IActionResult GetGeoLocation()
         {
-            IPAddress remoteIP = Request.HttpContext.Connection.RemoteIpAddress;
-            if (remoteIP != null)
-            {
-                if (remoteIP.AddressFamily == AddressFamily.InterNetworkV6)
-                {
-                    remoteIP = Dns.GetHostEntry(remoteIP).AddressList
-                        .First(x => x.AddressFamily == AddressFamily.InterNetwork);
-                }
-            }
-
-            var items = _geoLocationService.GetGeoLocationByIPAsync(remoteIP.ToString());
+            var items = _geoLocationService.GetGeoLocationByIPAsync(Request.HttpContext.Connection.RemoteIpAddress.ToString());
             return Ok(items.Result);
         }
 
-        // GET: api/GeoLocation/8.8.8.8
+        /// <summary>
+        ///  Get the GeoLocation for the IPAddress the user specified
+        /// </summary>
+        /// <response code="200"></response>
         [HttpGet("{IPAddress}")]
         public IActionResult GetGeoLocationByIPAsync(string IPAddress)
 
         {            
             var items = _geoLocationService.GetGeoLocationByIPAsync(IPAddress);
-
             return Ok(items.Result);
         }
     }
