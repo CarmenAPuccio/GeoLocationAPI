@@ -10,7 +10,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.PlatformAbstractions;
 using Swashbuckle.AspNetCore.SwaggerGen;
+using System;
 using System.IO;
+using System.Net;
 using System.Reflection;
 
 
@@ -46,7 +48,17 @@ namespace GeoLocationAPI
             services.AddControllers();
             services.AddSingleton<IGeoLocationService, GeoLocationService>();
             services.Configure<AppSettings>(Configuration.GetSection("DBSettings"));
+            services.Configure<AppSettings>(Configuration.GetSection("ProxyInformation"));
             services.AddHealthChecks();
+            services.Configure<ForwardedHeadersOptions>(options =>
+            {
+                options.ForwardedHeaders = 
+                ForwardedHeaders.XForwardedFor |  ForwardedHeaders.XForwardedProto;
+                //options.KnownNetworks.Add(new IPNetwork(IPAddress.Parse("172.25.0.0"), 16));
+                options.KnownNetworks.Add(new IPNetwork(IPAddress.Parse(Configuration["ProxyInformation:ProxyKnownNetwork"]), Int32.Parse(Configuration["ProxyInformation:ProxyKnownNetworkCIDR"])));
+                options.ForwardLimit = null;
+
+            });
             services.AddApiVersioning(
                 options =>
                 {
@@ -99,14 +111,7 @@ namespace GeoLocationAPI
                     }
                 });
 
-            app.UseForwardedHeaders(new ForwardedHeadersOptions
-            {
-                ForwardedHeaders = ForwardedHeaders.XForwardedFor |
-            ForwardedHeaders.XForwardedProto
-
-            });
-
-            app.UseHttpsRedirection();
+            app.UseForwardedHeaders();    
 
             app.UseRouting();
 
