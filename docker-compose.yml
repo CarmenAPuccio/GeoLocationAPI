@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  geolocationapi:
+    image: geolocationapi
+    hostname: 'geolocationapi'
+    build:
+      context: .
+      dockerfile: GeoLocationAPI/Dockerfile
+    ports:
+      - '5000'
+    restart: always
+
+  nginx:
+    build: ./nginx
+    hostname: 'nginx'
+    ports:
+      - "80:80"
+    depends_on:
+      - geolocationapi
+    environment:
+    - NGINX_PORT=80  
+    - GEOLOCATIONAPI_HOST=geolocationapi
+    - GEOLOCATIONAPI_PORT=5000
