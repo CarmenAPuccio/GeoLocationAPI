@@ -3,10 +3,10 @@ WORKDIR /app
 
 FROM mcr.microsoft.com/dotnet/sdk:5.0 AS build
 WORKDIR /src
-COPY ["GeoLocationAPI/GeoLocationAPI.csproj", "GeoLocationAPI/"]
-RUN dotnet restore "GeoLocationAPI/GeoLocationAPI.csproj"
+COPY ["GeoLocationAPI.csproj", "./"]
+RUN dotnet restore "GeoLocationAPI.csproj"
 COPY . .
-WORKDIR "/src/GeoLocationAPI"
+WORKDIR "/src/."
 RUN dotnet build "GeoLocationAPI.csproj" -c Release -o /app/build
 
 FROM build AS publish

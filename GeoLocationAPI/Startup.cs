@@ -54,7 +54,6 @@ namespace GeoLocationAPI
             {
                 options.ForwardedHeaders = 
                 ForwardedHeaders.XForwardedFor |  ForwardedHeaders.XForwardedProto;
-                //options.KnownNetworks.Add(new IPNetwork(IPAddress.Parse("172.25.0.0"), 16));
                 options.KnownNetworks.Add(new IPNetwork(IPAddress.Parse(Configuration["ProxyInformation:ProxyKnownNetwork"]), Int32.Parse(Configuration["ProxyInformation:ProxyKnownNetworkCIDR"])));
                 options.ForwardLimit = null;
 
