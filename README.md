@@ -32,6 +32,8 @@ curl -X GET "http://localhost/api/v1/GeoLocation/8.8.8.8" -v
 ## Running on ECS Fargate
 
 The [AWS CDK](https://aws.amazon.com/cdk/) is used to deploy the application to ECS Fargate via the CDK for C#. Follow the instructions in the [README.md](CdkGeoLocationApi/README.md).
+
+Alternatively, you can use the [Docker Compose for Amazon ECS](https://docs.docker.com/cloud/ecs-integration/) integration to launch the application to ECS Fargate by using the Docker CLI. You can look at [docker-compose-ecs-demo.yml](docker-compose-ecs-demo.yml) to see a simple example.
 ## Running on Kubernetes
 
 To deploy to an existing Kubernetes cluster:

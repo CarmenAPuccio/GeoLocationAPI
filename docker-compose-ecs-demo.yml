@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  geolocationapi:
+    image: carmenpuccio/geolocationapi:latest
+    ports:
+      - target: 5000
+        x-aws-protocol: http
+    environment:
+        - ASPNETCORE_ENVIRONMENT=Production
+        - ASPNETCORE_URLS=http://+:5000
+
+x-aws-cloudformation:
+    Resources:
+        Geolocationapi5000TargetGroup:
+            Properties:
+                HealthCheckPath: /hc
+                Matcher:
+                    HttpCode: 200
