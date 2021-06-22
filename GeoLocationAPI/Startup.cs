@@ -47,7 +47,6 @@ namespace GeoLocationAPI
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddOpenTelemetryTracing((builder) => builder
-                //.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("GeoLocationAPI"))
                 .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(this.Configuration.GetValue<string>("ServiceName")))
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()

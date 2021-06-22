@@ -36,19 +36,14 @@ namespace GeoLocationAPI
                 {
                     builder.ClearProviders();
                     builder.AddConsole();
-
-                    //var useLogging = context.Configuration.GetValue<bool>("UseLogging");
-                    //if (useLogging)
-                    //{
-                        builder.AddOpenTelemetry(options =>
-                        {
-                            options.IncludeScopes = true;
-                            options.ParseStateValues = true;
-                            options.IncludeFormattedMessage = true;
-                            options.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(context.Configuration.GetValue<string>("ServiceName")));
-                            options.AddConsoleExporter();
-                        });
-                    //}
+                    builder.AddOpenTelemetry(options =>
+                    {
+                        options.IncludeScopes = true;
+                        options.ParseStateValues = true;
+                        options.IncludeFormattedMessage = true;
+                        options.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(context.Configuration.GetValue<string>("ServiceName")));
+                        options.AddConsoleExporter();
+                    });
                 });
     }
 }
