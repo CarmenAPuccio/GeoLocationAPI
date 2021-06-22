@@ -1,10 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Resources;
 
 namespace GeoLocationAPI
 {
@@ -32,6 +31,24 @@ namespace GeoLocationAPI
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();
+                })
+                .ConfigureLogging((context, builder) =>
+                {
+                    builder.ClearProviders();
+                    builder.AddConsole();
+
+                    //var useLogging = context.Configuration.GetValue<bool>("UseLogging");
+                    //if (useLogging)
+                    //{
+                        builder.AddOpenTelemetry(options =>
+                        {
+                            options.IncludeScopes = true;
+                            options.ParseStateValues = true;
+                            options.IncludeFormattedMessage = true;
+                            options.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(context.Configuration.GetValue<string>("ServiceName")));
+                            options.AddConsoleExporter();
+                        });
+                    //}
                 });
     }
 }

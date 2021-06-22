@@ -9,6 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.PlatformAbstractions;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System;
 using System.IO;
@@ -44,7 +46,12 @@ namespace GeoLocationAPI
         /// <param name="services">The collection of services to configure the application with.</param>
         public void ConfigureServices(IServiceCollection services)
         {
-
+            services.AddOpenTelemetryTracing((builder) => builder
+                //.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("GeoLocationAPI"))
+                .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(this.Configuration.GetValue<string>("ServiceName")))
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddConsoleExporter());
             services.AddControllers();
             services.AddSingleton<IGeoLocationService, GeoLocationService>();
             services.Configure<AppSettings>(Configuration.GetSection("DBSettings"));
