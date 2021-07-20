@@ -11,11 +11,11 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Versioning" Version="5.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Versioning.ApiExplorer" Version="5.0.0" />
     <PackageReference Include="Microsoft.Extensions.PlatformAbstractions" Version="1.1.0" />
-    <PackageReference Include="OpenTelemetry" Version="1.1.0-beta4" />
-    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.1.0-beta4" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.0.0-rc5" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.0.0-rc5" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.0.0-rc5" />
+    <PackageReference Include="OpenTelemetry" Version="1.1.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.1.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.0.0-rc7" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.0.0-rc7" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.0.0-rc7" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.1.4" />
   </ItemGroup>
 
