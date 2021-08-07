@@ -1,6 +1,6 @@
-# Welcome to your CDK C# project!
+# Welcome to the GeoLocationAPI CDK C# project!
 
-This is a blank project for C# development with CDK.
+This is a project for C# development with the CDK to build the GeoLocationAPI.
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
 

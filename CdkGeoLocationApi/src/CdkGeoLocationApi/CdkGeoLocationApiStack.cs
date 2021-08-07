@@ -3,6 +3,7 @@ using Amazon.CDK.AWS.EC2;
 using Amazon.CDK.AWS.ECS;
 using Amazon.CDK.AWS.ElasticLoadBalancingV2;
 using Amazon.CDK.AWS.IAM;
+using Amazon.CDK.AWS.Logs;
 using System.IO;
 using System.Collections.Generic;
 
@@ -23,7 +24,16 @@ namespace CdkGeoLocationApi
             // Create the Fargate Cluster
             Cluster geoLocationAPICluster = new Cluster(this, "GeoLocationAPICluster", new ClusterProps
             {
-                Vpc = geoLocationAPIVPC
+                Vpc = geoLocationAPIVPC,
+                ContainerInsights = true
+            });
+
+            // Create the LogGroup
+            LogGroup geoLocationAPILogGroup = new LogGroup(this, "GeoLocationAPILogGroup", new LogGroupProps
+            {
+                LogGroupName = "/geolocationapi-logs",
+                Retention = RetentionDays.SIX_MONTHS,
+                RemovalPolicy = RemovalPolicy.DESTROY
             });
 
             // The IAM role assumed by the task and its containers
@@ -41,7 +51,13 @@ namespace CdkGeoLocationApi
                     "logs:CreateLogStream",
                     "logs:CreateLogGroup",
                     "logs:DescribeLogStreams",
-                    "logs:PutLogEvents"
+                    "logs:PutLogEvents",
+                    "xray:PutTraceSegments",
+                    "xray:PutTelemetryRecords",
+				    "xray:GetSamplingRules",
+				    "xray:GetSamplingTargets",
+				    "xray:GetSamplingStatisticSummaries",
+				    "ssm:GetParameters"
                 }
             }));
 
@@ -62,16 +78,36 @@ namespace CdkGeoLocationApi
                 TaskRole = geoLocationAPITaskRole
             });
 
+            // AWS OTEL Collector Container
+            ContainerDefinition awsOTELCollectorContainer = geolocationAPITaskDef.AddContainer("aws-otel-collector", new ContainerDefinitionOptions
+            {
+                Image = ContainerImage.FromAsset(Path.GetFullPath("../aws-otel-collector")),
+                MemoryLimitMiB = 512,
+                Cpu = 256,
+                Command = new[] {
+                    "--config=/etc/ecs/ecs-resource-detection.yaml"
+                },
+                Essential = true,
+                Logging = new AwsLogDriver(new AwsLogDriverProps {
+                    LogGroup = geoLocationAPILogGroup,
+                    StreamPrefix = "aws-otel-sidecar-collector"
+                }),
+            });
+
             // GeoLocationAPI Container
             ContainerDefinition geolocationAPIContainer = geolocationAPITaskDef.AddContainer("GeoLocationAPI", new ContainerDefinitionOptions
             {
                 Image = ContainerImage.FromAsset(Path.GetFullPath("../GeoLocationAPI")),
                 MemoryLimitMiB = 512,
                 Essential = true,
-                Logging = new AwsLogDriver(new AwsLogDriverProps { StreamPrefix = "geolocationapi-logs" }),
+                Logging = new AwsLogDriver(new AwsLogDriverProps { 
+                    LogGroup = geoLocationAPILogGroup,
+                    StreamPrefix = "/geolocationapi-logs" 
+                }),
                 Environment = new Dictionary<string, string>() {
                     {"ASPNETCORE_URLS", "http://+:5000"},
-                    {"ASPNETCORE_ENVIRONMENT", "Production"}
+                    {"ASPNETCORE_ENVIRONMENT", "Production"},
+                    {"OTEL_OTLP_ENDPOINT", "http://localhost:4317"}
                 },
                 HealthCheck = new Amazon.CDK.AWS.ECS.HealthCheck
                 {
@@ -87,25 +123,10 @@ namespace CdkGeoLocationApi
                 PortMappings = new[] { new PortMapping { ContainerPort = 5000 } }
             });
 
-            // NGINX Reverse Proxy Container
-            ContainerDefinition nginxContainer = geolocationAPITaskDef.AddContainer("NGINX-Proxy", new ContainerDefinitionOptions
+            geolocationAPIContainer.AddContainerDependencies(new ContainerDependency
             {
-                Image = ContainerImage.FromAsset(Path.GetFullPath("../nginx")),
-                MemoryLimitMiB = 512,
-                Essential = true,
-                Logging = new AwsLogDriver(new AwsLogDriverProps { StreamPrefix = "geolocationapi-logs" }),
-                Environment = new Dictionary<string, string>() {
-                    {"NGINX_PORT", "80"},
-                    {"GEOLOCATIONAPI_HOST", "localhost"},
-                    {"GEOLOCATIONAPI_PORT", "5000"}
-                },
-                PortMappings = new[] { new PortMapping { ContainerPort = 80 } }
-            });
-
-            nginxContainer.AddContainerDependencies(new ContainerDependency
-            {
-                Container = geolocationAPIContainer,
-                Condition = ContainerDependencyCondition.HEALTHY
+                Container = awsOTELCollectorContainer,
+                Condition = ContainerDependencyCondition.START
             });
 
             // Create the Fargate Service
@@ -132,10 +153,11 @@ namespace CdkGeoLocationApi
             // Attach ALB to ECS Service
             ApplicationTargetGroup geoLocationAPITargetGroup = listener.AddTargets("GeoLocationAPI", new AddApplicationTargetsProps
             {
+                //Port = 80,
                 Port = 80,
                 Targets = new[] { geoLocationAPIService.LoadBalancerTarget( new LoadBalancerTargetOptions {
-                    ContainerName = "NGINX-Proxy",
-                    ContainerPort = 80
+                    ContainerName = "GeoLocationAPI",
+                    ContainerPort = 5000
                 })},
                 HealthCheck = new Amazon.CDK.AWS.ElasticLoadBalancingV2.HealthCheck
                 {
@@ -150,8 +172,8 @@ namespace CdkGeoLocationApi
             });
 
             //Output the DNS where you can access your service
-            new CfnOutput(this, "GeoLocationAPI-LoadBalancerDNS", new CfnOutputProps
-            { Value = lb.LoadBalancerDnsName });
+            new CfnOutput(this, "GeoLocationAPI-LoadBalancerURL", new CfnOutputProps
+            { Value = "http://" + lb.LoadBalancerDnsName + "/api/v1/geolocation" });
         }
     }
 }

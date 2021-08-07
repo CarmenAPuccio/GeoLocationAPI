@@ -6,4 +6,5 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5000
+      - OTEL_OTLP_ENDPOINT=http://aws-otel-collector:4317
 

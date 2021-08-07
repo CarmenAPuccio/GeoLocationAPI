@@ -1,0 +1,49 @@
+extensions:
+  health_check:
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:55681
+  awsxray:
+    endpoint: 0.0.0.0:2000
+    transport: udp
+  statsd:
+    endpoint: 0.0.0.0:8125
+    aggregation_interval: 60s
+
+processors:
+  batch/traces:
+    timeout: 1s
+    send_batch_size: 50
+  batch/metrics:
+    timeout: 60s
+  resourcedetection:
+  resourcedetection/ecs:
+    detectors: [env, ecs]
+    timeout: 2s
+    override: false
+
+exporters:
+  logging:
+    loglevel: debug
+  awsxray:
+  awsemf:
+    namespace: ECS/AWSOTel/Application
+    log_group_name: '/aws/ecs/application/metrics'
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp,awsxray]
+      processors: [resourcedetection/ecs, batch/traces]
+      exporters: [awsxray]
+    metrics:
+      receivers: [otlp, statsd]
+      processors: [resourcedetection/ecs, batch/metrics]
+      exporters: [awsemf]
+
+  extensions: [health_check]
