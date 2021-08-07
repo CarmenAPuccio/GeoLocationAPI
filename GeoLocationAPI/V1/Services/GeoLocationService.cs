@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -47,15 +48,6 @@ namespace GeoLocationAPI.V1.Services
             var response = new GeoLocation();
             if (System.Net.IPAddress.TryParse(incomingIP, out var ipParseResult))
             {
-                if (ipParseResult != null)
-                {
-                    if (ipParseResult.AddressFamily == AddressFamily.InterNetworkV6)
-                    {
-                        ipParseResult = Dns.GetHostEntry(ipParseResult).AddressList
-                            .First(x => x.AddressFamily == AddressFamily.InterNetwork);
-                    }
-                }
-
                 var geoDB = _appSettings.Value.GeoLite2CityDB;
                 response.Date = DateTime.UtcNow.ToUniversalTime();
                 response.IPAddress = ipParseResult.ToString();
@@ -71,12 +63,16 @@ namespace GeoLocationAPI.V1.Services
                         response.Country = cityResponse.Country.ToString();
                         response.IPFoundInGeoDB = true;
                         response.Message = (response.IPAddress + " found in the GeoDB");
+                        Activity.Current?.AddEvent(new ActivityEvent(response.IPAddress + " found in the GeoDB"));
+                        Activity.Current?.SetTag("otel.status_code", "OK");
                     }
                     else
                     {                        
                         response.IPFoundInGeoDB = false;
                         _logger.LogWarning(response.IPAddress + " not found in the GeoDB");
                         response.Message = (response.IPAddress + " not found in the GeoDB");
+                        Activity.Current?.AddEvent(new ActivityEvent(response.IPAddress + " not found in the GeoDB"));
+                        Activity.Current?.SetTag("otel.status_code", "OK");
                     }
                 }
                 return await Task.FromResult(response);
@@ -86,6 +82,8 @@ namespace GeoLocationAPI.V1.Services
                 response.IPFoundInGeoDB = false;
                 _logger.LogWarning(incomingIP + " Unable to Parse");
                 response.Message = (incomingIP + " Unable to Parse");
+                Activity.Current?.SetTag("otel.status_code", "Error");
+                Activity.Current?.SetTag("otel.status_description", incomingIP + " Unable to Parse");
                 return await Task.FromResult(response);
             }           
             

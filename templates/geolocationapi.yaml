@@ -16,9 +16,9 @@ spec:
   ports: 
     - 
       name: http
-      port: 80
+      port: 5000
       protocol: TCP
-      targetPort: 80
+      targetPort: 5000
   selector: 
     app: geolocationapi
 --- 
@@ -42,30 +42,8 @@ spec:
         app: geolocationapi
     spec: 
       containers: 
-        - image: "carmenpuccio/geolocationapi_nginx:latest"
-          name: nginx
-          env: 
-            - name: NGINX_PORT
-              value: "80"
-            - name: GEOLOCATIONAPI_HOST
-              value: localhost
-            - name: GEOLOCATIONAPI_PORT
-              value: "5000"
-          ports: 
-            - containerPort: 80
-              name: nginx
-          livenessProbe:
-            httpGet:
-              path: /hc
-              port: 80
-            initialDelaySeconds: 5
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /hc
-              port: 80
-            initialDelaySeconds: 5
-            timeoutSeconds: 1             
+        - image: "carmenpuccio/aws-otel-collector:latest"
+          name: aws-otel-collector           
         - image: "carmenpuccio/geolocationapi:latest"
           name: geolocationapi
           env: 
@@ -73,6 +51,20 @@ spec:
               value: Production
             - name: ASPNETCORE_URLS
               value: "http://+:5000"
+            - name: OTEL_OTLP_ENDPOINT
+              value: "http://localhost:4317"
           ports: 
             - containerPort: 5000
               name: geolocationapi
+          livenessProbe:
+            httpGet:
+              path: /hc
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /hc
+              port: 5000
+            initialDelaySeconds: 5
+            timeoutSeconds: 1  

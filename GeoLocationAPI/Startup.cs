@@ -9,6 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.PlatformAbstractions;
+using OpenTelemetry;
+using OpenTelemetry.Contrib.Extensions.AWSXRay.Trace;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Swashbuckle.AspNetCore.SwaggerGen;
@@ -16,7 +18,6 @@ using System;
 using System.IO;
 using System.Net;
 using System.Reflection;
-
 
 namespace GeoLocationAPI
 {
@@ -45,13 +46,31 @@ namespace GeoLocationAPI
         /// </summary>
         /// <param name="services">The collection of services to configure the application with.</param>
         public void ConfigureServices(IServiceCollection services)
-        {
-            services.AddOpenTelemetryTracing((builder) => builder
-                .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(this.Configuration.GetValue<string>("ServiceName")))
+        {            
+            services.AddControllers();     
+
+            AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);       
+            
+            Sdk.CreateTracerProviderBuilder()
+                .SetResourceBuilder(
+                    ResourceBuilder.CreateDefault().AddService(
+                        this.Configuration.GetValue<string>("ServiceName"), 
+                        serviceNamespace:"GeoLocation",
+                        autoGenerateServiceInstanceId:false)
+                    .AddTelemetrySdk())
+                .AddXRayTraceId()
+                .AddAWSInstrumentation()
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
-                .AddConsoleExporter());
-            services.AddControllers();
+                .AddOtlpExporter(otlpOptions =>
+                {
+                    otlpOptions.Endpoint = new Uri(this.Configuration.GetValue<string>("OTEL_OTLP_ENDPOINT"));
+                })
+                .AddConsoleExporter()
+                .Build();
+
+            Sdk.SetDefaultTextMapPropagator(new AWSXRayPropagator());
+            
             services.AddSingleton<IGeoLocationService, GeoLocationService>();
             services.Configure<AppSettings>(Configuration.GetSection("DBSettings"));
             services.Configure<AppSettings>(Configuration.GetSection("ProxyInformation"));
