@@ -29,6 +29,20 @@ Once the container is up and running you can simply do something like this:
 ```sh
 curl -X GET "http://localhost:5000/api/v1/GeoLocation/8.8.8.8" -v
 ```
+
+Sample Payload:
+```
+{
+	"date": "2021-08-10T20:02:02.8865367Z",
+	"ipAddress": "8.8.8.8",
+	"city": "",
+	"timeZone": "America/Chicago",
+	"continent": "North America",
+	"country": "United States",
+	"ipFoundInGeoDB": true,
+	"message": "8.8.8.8 found in the GeoDB"
+}
+```
 ## Running on ECS Fargate
 
 The [AWS CDK](https://aws.amazon.com/cdk/) is used to deploy the application to ECS Fargate via the CDK for C#. Follow the instructions in the [README.md](CdkGeoLocationApi/README.md).
