@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace GeoLocationAPI.V1.Models
+﻿namespace GeoLocationAPI.V1.Models
 {
     /// <summary>
     /// Represents the appsettings.json for Configuration
