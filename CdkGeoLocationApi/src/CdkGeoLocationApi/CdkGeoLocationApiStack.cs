@@ -151,7 +151,7 @@ namespace CdkGeoLocationApi
             ApplicationListener listener = lb.AddListener("PublicListener", new BaseApplicationListenerProps { Port = 80 });
 
             // Attach ALB to ECS Service
-            ApplicationTargetGroup geoLocationAPITargetGroup = listener.AddTargets("GeoLocationAPI", new AddApplicationTargetsProps
+            listener.AddTargets("GeoLocationAPI", new AddApplicationTargetsProps
             {
                 //Port = 80,
                 Port = 80,
