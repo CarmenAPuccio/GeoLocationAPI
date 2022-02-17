@@ -14,6 +14,7 @@ using OpenTelemetry.Trace;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Net;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 
@@ -153,7 +154,7 @@ Task WriteResponse(HttpContext context, HealthReport healthReport)
         jsonWriter.WriteStartObject();
         jsonWriter.WriteString("Status", healthReport.Status.ToString());
         jsonWriter.WriteString("Duration", healthReport.TotalDuration.ToString());
-        jsonWriter.WriteString("Architecture", System.Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE"));
+        jsonWriter.WriteString("Architecture", RuntimeInformation.ProcessArchitecture.ToString());
         jsonWriter.WriteStartObject("Results");
 
         foreach (var healthReportEntry in healthReport.Entries)
