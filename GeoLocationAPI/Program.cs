@@ -154,7 +154,8 @@ Task WriteResponse(HttpContext context, HealthReport healthReport)
         jsonWriter.WriteStartObject();
         jsonWriter.WriteString("Status", healthReport.Status.ToString());
         jsonWriter.WriteString("Duration", healthReport.TotalDuration.ToString());
-        jsonWriter.WriteString("Architecture", RuntimeInformation.ProcessArchitecture.ToString());
+        jsonWriter.WriteString("FrameworkDescription", RuntimeInformation.FrameworkDescription);
+        jsonWriter.WriteString("ProcessArchitecture", RuntimeInformation.ProcessArchitecture.ToString());
         jsonWriter.WriteStartObject("Results");
 
         foreach (var healthReportEntry in healthReport.Entries)
