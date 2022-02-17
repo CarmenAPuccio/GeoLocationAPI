@@ -1,11 +1,7 @@
 ﻿using GeoLocationAPI.V1.Models;
 using MaxMind.GeoIP2;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System;
 using System.Diagnostics;
-using System.Threading.Tasks;
 
 namespace GeoLocationAPI.V1.Services
 {
@@ -64,7 +60,7 @@ namespace GeoLocationAPI.V1.Services
                         Activity.Current?.SetTag("otel.status_code", "OK");
                     }
                     else
-                    {                        
+                    {
                         response.IPFoundInGeoDB = false;
                         _logger.LogWarning(response.IPAddress + " not found in the GeoDB");
                         response.Message = (response.IPAddress + " not found in the GeoDB");
@@ -75,15 +71,15 @@ namespace GeoLocationAPI.V1.Services
                 return await Task.FromResult(response);
             }
             else
-            {                
+            {
                 response.IPFoundInGeoDB = false;
                 _logger.LogWarning(incomingIP + " Unable to Parse");
                 response.Message = (incomingIP + " Unable to Parse");
                 Activity.Current?.SetTag("otel.status_code", "Error");
                 Activity.Current?.SetTag("otel.status_description", incomingIP + " Unable to Parse");
                 return await Task.FromResult(response);
-            }           
-            
+            }
+
         }
     }
 }

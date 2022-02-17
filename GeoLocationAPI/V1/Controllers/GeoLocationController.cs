@@ -1,20 +1,20 @@
 ﻿using GeoLocationAPI.V1.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using GeoLocationAPI.V1.Models;
 
-namespace GeoLocationAPI.Controllers
+namespace GeoLocationAPI.V1.Controllers
 {
     /// <summary>
     /// API for retrieving GeoLocations
     /// </summary>
     [ApiController]
-    [ApiVersion( "1.0" )]
-    [Route( "api/v{version:apiVersion}/[controller]" )]
-    //[Route("api/[controller]")]
+    [ApiVersion("1.0")]
+    [Route("api/v{version:apiVersion}/[controller]")]
+    [Produces("application/json")]
     public class GeoLocationController : ControllerBase
-    {        
-        
-        private readonly ILogger _logger;
+    {
+        private readonly ILogger<GeoLocationController> _logger;
         private readonly IGeoLocationService _geoLocationService;
         /// <summary>
         /// 
@@ -36,10 +36,10 @@ namespace GeoLocationAPI.Controllers
         /// </summary>
         /// <response code="200"></response>
         [HttpGet]
-        public IActionResult GetGeoLocation()
+        public async Task<ActionResult<GeoLocation>> GetGeoLocation()
         {
-            var items = _geoLocationService.GetGeoLocationByIPAsync(Request.HttpContext.Connection.RemoteIpAddress.ToString());
-            return Ok(items.Result);
+            var items = await _geoLocationService.GetGeoLocationByIPAsync(Request.HttpContext.Connection.RemoteIpAddress.ToString());
+            return Ok(items);
         }
 
         /// <summary>
@@ -47,11 +47,11 @@ namespace GeoLocationAPI.Controllers
         /// </summary>
         /// <response code="200"></response>
         [HttpGet("{IPAddress}")]
-        public IActionResult GetGeoLocationByIPAsync(string IPAddress)
+        public async Task<ActionResult<GeoLocation>> GetGeoLocationByIPAsync(string IPAddress)
 
-        {            
-            var items = _geoLocationService.GetGeoLocationByIPAsync(IPAddress);
-            return Ok(items.Result);
+        {
+            var items = await _geoLocationService.GetGeoLocationByIPAsync(IPAddress);
+            return Ok(items);
         }
     }
 }

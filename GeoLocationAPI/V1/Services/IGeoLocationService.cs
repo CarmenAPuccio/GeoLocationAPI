@@ -14,6 +14,6 @@ namespace GeoLocationAPI.V1.Services
         /// <param name="incomingIP">The IP passed in from the GeoLocationController</param>
         /// <returns></returns>
         Task<GeoLocation> GetGeoLocationByIPAsync(string incomingIP);
-        
+
     }
 }

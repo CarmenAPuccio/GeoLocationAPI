@@ -14,5 +14,6 @@
         /// Path to GeoLite2-City.mmdb file
         /// </summary>
         public string GeoLite2CityDB { get; set; }
+
     }
 }
