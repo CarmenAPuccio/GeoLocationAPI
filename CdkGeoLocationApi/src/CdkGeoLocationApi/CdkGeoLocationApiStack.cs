@@ -55,10 +55,10 @@ namespace CdkGeoLocationApi
                     "logs:PutLogEvents",
                     "xray:PutTraceSegments",
                     "xray:PutTelemetryRecords",
-				    "xray:GetSamplingRules",
-				    "xray:GetSamplingTargets",
-				    "xray:GetSamplingStatisticSummaries",
-				    "ssm:GetParameters"
+                    "xray:GetSamplingRules",
+                    "xray:GetSamplingTargets",
+                    "xray:GetSamplingStatisticSummaries",
+                    "ssm:GetParameters"
                 }
             }));
 
@@ -154,7 +154,6 @@ namespace CdkGeoLocationApi
             // Attach ALB to ECS Service
             listener.AddTargets("GeoLocationAPI", new AddApplicationTargetsProps
             {
-                //Port = 80,
                 Port = 80,
                 Targets = new[] { geoLocationAPIService.LoadBalancerTarget( new LoadBalancerTargetOptions {
                     ContainerName = "GeoLocationAPI",

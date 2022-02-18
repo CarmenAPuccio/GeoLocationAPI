@@ -1,6 +1,5 @@
 ﻿using GeoLocationAPI.V1.Models;
 using MaxMind.GeoIP2;
-using Microsoft.Extensions.Options;
 using System.Diagnostics;
 
 namespace GeoLocationAPI.V1.Services
@@ -12,22 +11,18 @@ namespace GeoLocationAPI.V1.Services
     {
         private readonly ILogger _logger;
         private readonly IConfiguration _configuration;
-        private readonly IOptions<AppSettings> _appSettings;
 
         /// <summary>
         /// GeoLocationService
         /// </summary>
         /// <param name="logger"></param>
         /// <param name="configuration"></param>
-        /// <param name="appSettings"></param>
         public GeoLocationService(
             ILogger<GeoLocationService> logger,
-            IConfiguration configuration,
-            IOptions<AppSettings> appSettings)
+            IConfiguration configuration)
         {
             _logger = logger;
             _configuration = configuration;
-            _appSettings = appSettings;
         }
 
         /// <summary>
@@ -38,10 +33,10 @@ namespace GeoLocationAPI.V1.Services
         public async Task<GeoLocation> GetGeoLocationByIPAsync(string incomingIP)
 
         {
-            var response = new GeoLocation();
+            var response = new GeoLocation(incomingIP);
             if (System.Net.IPAddress.TryParse(incomingIP, out var ipParseResult))
             {
-                var geoDB = _appSettings.Value.GeoLite2CityDB;
+                var geoDB = _configuration["DBSettings:GeoLite2CityDB"];
                 response.Date = DateTime.UtcNow.ToUniversalTime();
                 response.IPAddress = ipParseResult.ToString();
 
@@ -51,7 +46,7 @@ namespace GeoLocationAPI.V1.Services
                     {
                         var cityResponse = reader.City(response.IPAddress);
                         response.City = cityResponse.City.ToString();
-                        response.TimeZone = cityResponse.Location.TimeZone.ToString();
+                        response.TimeZone = cityResponse.Location.TimeZone?.ToString();
                         response.Continent = cityResponse.Continent.ToString();
                         response.Country = cityResponse.Country.ToString();
                         response.IPFoundInGeoDB = true;

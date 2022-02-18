@@ -14,21 +14,21 @@ namespace GeoLocationAPI.V1.Controllers
     [Produces("application/json")]
     public class GeoLocationController : ControllerBase
     {
-        private readonly ILogger<GeoLocationController> _logger;
+        //private readonly ILogger<GeoLocationController> _logger;
         private readonly IGeoLocationService _geoLocationService;
         /// <summary>
         /// 
         /// </summary>
         /// <param name="geoLocationService"></param>
-        /// <param name="logger"></param>
+        ///// <param name="logger"></param>
         public GeoLocationController(
-            IGeoLocationService geoLocationService,
-            ILogger<GeoLocationController> logger
+            IGeoLocationService geoLocationService
+            //ILogger<GeoLocationController> logger
             )
 
         {
             _geoLocationService = geoLocationService;
-            _logger = logger;
+            //_logger = logger;
         }
 
         /// <summary>
@@ -38,6 +38,10 @@ namespace GeoLocationAPI.V1.Controllers
         [HttpGet]
         public async Task<ActionResult<GeoLocation>> GetGeoLocation()
         {
+            if (Request.HttpContext.Connection.RemoteIpAddress is null)
+            {
+                return BadRequest();
+            }
             var items = await _geoLocationService.GetGeoLocationByIPAsync(Request.HttpContext.Connection.RemoteIpAddress.ToString());
             return Ok(items);
         }

@@ -1,6 +1,5 @@
 using GeoLocationAPI.Swagger;
 using GeoLocationAPI.V1.HealthChecks;
-using GeoLocationAPI.V1.Models;
 using GeoLocationAPI.V1.Services;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -88,8 +87,6 @@ Sdk.CreateTracerProviderBuilder()
 Sdk.SetDefaultTextMapPropagator(new AWSXRayPropagator());
 
 builder.Services.AddSingleton<IGeoLocationService, GeoLocationService>();
-builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("DBSettings"));
-builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("ProxyInformation"));
 builder.Services.AddHealthChecks()
     .AddTypeActivatedCheck<GeoLocationHealthCheck>(
         "GeoLocationHealthCheck",

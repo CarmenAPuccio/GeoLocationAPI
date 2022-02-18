@@ -7,6 +7,10 @@ namespace GeoLocationAPI.V1.Models
     /// </summary>
     public class GeoLocation
     {
+        public GeoLocation(string ipAddress)
+        {
+            IPAddress = ipAddress;
+        }
         /// <summary>
         /// Gets or sets the Date UtcNow
         /// </summary>
@@ -21,22 +25,22 @@ namespace GeoLocationAPI.V1.Models
         /// <summary>
         /// Gets or sets the City for the IPAddress
         /// </summary>
-        public string City { get; set; }
+        public string? City { get; set; }
 
         /// <summary>
         /// Gets or sets the TimeZone for the IPAddress
         /// </summary>
-        public string TimeZone { get; set; }
+        public string? TimeZone { get; set; }
 
         /// <summary>
         /// Gets or sets the Continent for the IPAddress
         /// </summary>
-        public string Continent { get; set; }
+        public string? Continent { get; set; }
 
         /// <summary>
         /// Gets or sets the Country for the IPAddress
         /// </summary>
-        public string Country { get; set; }
+        public string? Country { get; set; }
 
         /// <summary>
         /// Bool result if the IPAddress is found in the GeoDB
@@ -46,6 +50,6 @@ namespace GeoLocationAPI.V1.Models
         /// <summary>
         /// Message to send back to the user
         /// </summary>
-        public string Message { get; set; }
+        public string? Message { get; set; }
     }
 }

@@ -52,7 +52,7 @@ namespace GeoLocationAPI.Swagger
 
                 if (parameter.Description == null)
                 {
-                    parameter.Description = description.ModelMetadata?.Description;
+                    parameter.Description = description.ModelMetadata.Description;
                 }
 
                 if (parameter.Schema.Default == null && description.DefaultValue != null)

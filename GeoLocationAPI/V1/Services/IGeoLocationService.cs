@@ -1,5 +1,4 @@
 ﻿using GeoLocationAPI.V1.Models;
-using System.Threading.Tasks;
 
 namespace GeoLocationAPI.V1.Services
 {
