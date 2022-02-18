@@ -53,6 +53,10 @@ spec:
               value: "http://+:5000"
             - name: OTEL_OTLP_ENDPOINT
               value: "http://localhost:4317"
+            - name: HealtcheckBaseURL
+              value: "http://localhost:5000/api/v1/geolocation/"
+            - name: HealtcheckIPToTest
+              value: "8.8.8.8"
           ports: 
             - containerPort: 5000
               name: geolocationapi
