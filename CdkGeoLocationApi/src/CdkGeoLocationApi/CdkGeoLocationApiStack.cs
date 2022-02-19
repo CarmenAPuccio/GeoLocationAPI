@@ -107,8 +107,7 @@ namespace CdkGeoLocationApi
                 }),
                 Environment = new Dictionary<string, string>() {
                     {"ASPNETCORE_URLS", "http://+:5000"},
-                    {"ASPNETCORE_ENVIRONMENT", "Production"},
-                    {"OTEL_OTLP_ENDPOINT", "http://localhost:4317"}
+                    {"ASPNETCORE_ENVIRONMENT", "Production"}
                 },
                 HealthCheck = new Amazon.CDK.AWS.ECS.HealthCheck
                 {

@@ -113,18 +113,19 @@ var apiVersionDescriptionProvider = app.Services.GetRequiredService<IApiVersionD
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
-}
-app.UseSwagger();
 
-app.UseSwaggerUI(
-    options =>
-    {
-        // build a swagger endpoint for each discovered API version
-        foreach (var description in apiVersionDescriptionProvider.ApiVersionDescriptions)
+    app.UseSwagger();
+
+    app.UseSwaggerUI(
+        options =>
         {
-            options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
-        }
-    });
+            // build a swagger endpoint for each discovered API version
+            foreach (var description in apiVersionDescriptionProvider.ApiVersionDescriptions)
+            {
+                options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
+            }
+        });
+}
 
 app.UseForwardedHeaders();
 
