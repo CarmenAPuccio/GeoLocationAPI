@@ -15,7 +15,7 @@ services:
     hostname: 'aws-otel-collector'
     build:
       context: ./aws-otel-collector
-    command: ["--config=/etc/ecs/ecs-resource-detection.yaml", "--log-level=DEBUG"]
+    command: ["--config=/etc/ecs/ecs-resource-detection.yaml"]
     environment:
       - AWS_REGION=us-east-1
       - AWS_PROFILE=default
