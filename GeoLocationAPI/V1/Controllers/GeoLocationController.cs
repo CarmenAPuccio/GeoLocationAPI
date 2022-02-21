@@ -1,8 +1,6 @@
 ﻿using GeoLocationAPI.V1.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using GeoLocationAPI.V1.Models;
-
 namespace GeoLocationAPI.V1.Controllers
 {
     /// <summary>
@@ -14,21 +12,17 @@ namespace GeoLocationAPI.V1.Controllers
     [Produces("application/json")]
     public class GeoLocationController : ControllerBase
     {
-        //private readonly ILogger<GeoLocationController> _logger;
         private readonly IGeoLocationService _geoLocationService;
         /// <summary>
         /// 
         /// </summary>
         /// <param name="geoLocationService"></param>
-        ///// <param name="logger"></param>
         public GeoLocationController(
             IGeoLocationService geoLocationService
-            //ILogger<GeoLocationController> logger
             )
 
         {
             _geoLocationService = geoLocationService;
-            //_logger = logger;
         }
 
         /// <summary>
