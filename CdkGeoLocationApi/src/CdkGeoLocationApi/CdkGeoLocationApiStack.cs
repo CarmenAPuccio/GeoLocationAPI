@@ -87,7 +87,7 @@ namespace CdkGeoLocationApi
             ContainerDefinition awsOTELCollectorContainer = geolocationAPITaskDef.AddContainer("aws-otel-collector", new ContainerDefinitionOptions
             {
                 // Building the image out of band as opposed to building in the project until this is resolved for arm64 with CDK
-                // https://github.com/aws/aws-cdk/issues/12472
+                // REF: https://github.com/aws/aws-cdk/issues/12472
                 //Image = ContainerImage.FromAsset(Path.GetFullPath("../aws-otel-collector")),
                 Image = ContainerImage.FromRegistry("carmenpuccio/aws-otel-collector:latest"),
                 MemoryLimitMiB = 512,
@@ -106,7 +106,7 @@ namespace CdkGeoLocationApi
             ContainerDefinition geolocationAPIContainer = geolocationAPITaskDef.AddContainer("GeoLocationAPI", new ContainerDefinitionOptions
             {
                 // Building the image out of band as opposed to building in the project until this is resolved for arm64 with CDK
-                // https://github.com/aws/aws-cdk/issues/12472
+                // REF: https://github.com/aws/aws-cdk/issues/12472
                 //Image = ContainerImage.FromAsset(Path.GetFullPath("../GeoLocationAPI")),
                 Image = ContainerImage.FromRegistry("carmenpuccio/geolocationapi:latest"),
                 MemoryLimitMiB = 512,
