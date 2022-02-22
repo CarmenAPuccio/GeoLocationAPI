@@ -19,6 +19,8 @@ Sample URL's:
   - http://localhost:5000/api/v1/geolocation/
 - Look up an IPAddress:
   -  http://localhost:5000/api/v1/geolocation/8.8.8.8
+- Healthcheck:
+  - http://localhost:5000/hc
 
 You can also run the project in Docker by running:
 ```sh
@@ -41,6 +43,28 @@ Sample Payload:
 	"country": "United States",
 	"ipFoundInGeoDB": true,
 	"message": "71.168.176.139 found in the GeoDB"
+}
+```
+You can check the healthcheck by issuing something like this. Note that it will return *ProcessArchitecture* which is useful to see if the workload is running on Arm64 or X64. The HealtcheckIPToTest (in this case 8.8.8.8) is set in the appsettings.json files:
+
+```sh
+curl -X GET "http://localhost:5000/hc" -v
+```
+
+Sample Payload:
+```
+{
+	"Status": "Healthy",
+	"Duration": "00:00:00.0084379",
+	"FrameworkDescription": ".NET 6.0.2",
+	"ProcessArchitecture": "Arm64",
+	"Results": {
+		"GeoLocationHealthCheck": {
+			"Status": "Healthy",
+			"Description": "The healthcheck is healthy - 8.8.8.8 found in the GeoDB",
+			"Data": {}
+		}
+	}
 }
 ```
 ## Running on ECS Fargate

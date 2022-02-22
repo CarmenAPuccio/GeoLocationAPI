@@ -55,10 +55,10 @@ namespace CdkGeoLocationApi
                     "logs:PutLogEvents",
                     "xray:PutTraceSegments",
                     "xray:PutTelemetryRecords",
-				    "xray:GetSamplingRules",
-				    "xray:GetSamplingTargets",
-				    "xray:GetSamplingStatisticSummaries",
-				    "ssm:GetParameters"
+                    "xray:GetSamplingRules",
+                    "xray:GetSamplingTargets",
+                    "xray:GetSamplingStatisticSummaries",
+                    "ssm:GetParameters"
                 }
             }));
 
@@ -76,13 +76,20 @@ namespace CdkGeoLocationApi
                 Compatibility = Compatibility.FARGATE,
                 Cpu = "1024",
                 MemoryMiB = "4096",
-                TaskRole = geoLocationAPITaskRole
+                TaskRole = geoLocationAPITaskRole,
+                RuntimePlatform = new RuntimePlatform {
+                    OperatingSystemFamily = OperatingSystemFamily.LINUX,
+                    CpuArchitecture = CpuArchitecture.ARM64
+                    },
             });
 
             // AWS OTEL Collector Container
             ContainerDefinition awsOTELCollectorContainer = geolocationAPITaskDef.AddContainer("aws-otel-collector", new ContainerDefinitionOptions
             {
-                Image = ContainerImage.FromAsset(Path.GetFullPath("../aws-otel-collector")),
+                // Building the image out of band as opposed to building in the project until this is resolved for arm64 with CDK
+                // REF: https://github.com/aws/aws-cdk/issues/12472
+                //Image = ContainerImage.FromAsset(Path.GetFullPath("../aws-otel-collector")),
+                Image = ContainerImage.FromRegistry("carmenpuccio/aws-otel-collector:latest"),
                 MemoryLimitMiB = 512,
                 Cpu = 256,
                 Command = new[] {
@@ -98,7 +105,10 @@ namespace CdkGeoLocationApi
             // GeoLocationAPI Container
             ContainerDefinition geolocationAPIContainer = geolocationAPITaskDef.AddContainer("GeoLocationAPI", new ContainerDefinitionOptions
             {
-                Image = ContainerImage.FromAsset(Path.GetFullPath("../GeoLocationAPI")),
+                // Building the image out of band as opposed to building in the project until this is resolved for arm64 with CDK
+                // REF: https://github.com/aws/aws-cdk/issues/12472
+                //Image = ContainerImage.FromAsset(Path.GetFullPath("../GeoLocationAPI")),
+                Image = ContainerImage.FromRegistry("carmenpuccio/geolocationapi:latest"),
                 MemoryLimitMiB = 512,
                 Essential = true,
                 Logging = new AwsLogDriver(new AwsLogDriverProps { 
@@ -107,8 +117,7 @@ namespace CdkGeoLocationApi
                 }),
                 Environment = new Dictionary<string, string>() {
                     {"ASPNETCORE_URLS", "http://+:5000"},
-                    {"ASPNETCORE_ENVIRONMENT", "Production"},
-                    {"OTEL_OTLP_ENDPOINT", "http://localhost:4317"}
+                    {"ASPNETCORE_ENVIRONMENT", "Production"}
                 },
                 HealthCheck = new Amazon.CDK.AWS.ECS.HealthCheck
                 {
@@ -154,7 +163,6 @@ namespace CdkGeoLocationApi
             // Attach ALB to ECS Service
             listener.AddTargets("GeoLocationAPI", new AddApplicationTargetsProps
             {
-                //Port = 80,
                 Port = 80,
                 Targets = new[] { geoLocationAPIService.LoadBalancerTarget( new LoadBalancerTargetOptions {
                     ContainerName = "GeoLocationAPI",
