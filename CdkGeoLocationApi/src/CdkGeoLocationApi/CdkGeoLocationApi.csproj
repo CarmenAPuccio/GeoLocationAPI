@@ -8,8 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Amazon.CDK.Lib" Version="2.13.0" />
-    <PackageReference Include="Constructs" Version="10.0.69" />
+    <PackageReference Include="Amazon.CDK.Lib" Version="2.55.1" />
+    <PackageReference Include="Constructs" Version="[10.0.0,11.0.0)" />
   </ItemGroup>
 
 </Project>

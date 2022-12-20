@@ -16,9 +16,9 @@ spec:
   ports: 
     - 
       name: http
-      port: 5000
+      port: 5254
       protocol: TCP
-      targetPort: 5000
+      targetPort: 5254
   selector: 
     app: geolocationapi
 --- 
@@ -50,25 +50,25 @@ spec:
             - name: ASPNETCORE_ENVIRONMENT
               value: Production
             - name: ASPNETCORE_URLS
-              value: "http://+:5000"
+              value: "http://+:5254"
             - name: OTEL_OTLP_ENDPOINT
               value: "http://localhost:4317"
             - name: HealtcheckBaseURL
-              value: "http://localhost:5000/api/v1/geolocation/"
+              value: "http://localhost:5254/api/v1/geolocation/"
             - name: HealtcheckIPToTest
               value: "8.8.8.8"
           ports: 
-            - containerPort: 5000
+            - containerPort: 5254
               name: geolocationapi
           livenessProbe:
             httpGet:
               path: /hc
-              port: 5000
+              port: 5254
             initialDelaySeconds: 5
             periodSeconds: 30
           readinessProbe:
             httpGet:
               path: /hc
-              port: 5000
+              port: 5254
             initialDelaySeconds: 5
             timeoutSeconds: 1  

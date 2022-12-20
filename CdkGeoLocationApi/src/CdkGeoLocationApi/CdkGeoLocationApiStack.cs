@@ -1,12 +1,13 @@
 using Constructs;
 using Amazon.CDK;
 using Amazon.CDK.AWS.EC2;
+using Amazon.CDK.AWS.Ecr.Assets;
 using Amazon.CDK.AWS.ECS;
 using Amazon.CDK.AWS.ElasticLoadBalancingV2;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Logs;
-using System.IO;
 using System.Collections.Generic;
+using System.IO;
 
 namespace CdkGeoLocationApi
 {
@@ -18,7 +19,7 @@ namespace CdkGeoLocationApi
             // NOTE: Make sure the CIDR is the same as what's set in the appsettings.json for the GeoLocationAPI project
             Vpc geoLocationAPIVPC = new Vpc(this, "GeoLocationAPIVPC", new VpcProps
             {
-                Cidr = "172.25.0.0/16",
+                IpAddresses = IpAddresses.Cidr("172.25.0.0/16"),
                 MaxAzs = 2
             });
 
@@ -49,6 +50,10 @@ namespace CdkGeoLocationApi
             {
                 Resources = new[] { "*" },
                 Actions = new[] {
+                    "ecr:GetAuthorizationToken",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage",
                     "logs:CreateLogStream",
                     "logs:CreateLogGroup",
                     "logs:DescribeLogStreams",
@@ -77,60 +82,71 @@ namespace CdkGeoLocationApi
                 Cpu = "1024",
                 MemoryMiB = "4096",
                 TaskRole = geoLocationAPITaskRole,
-                RuntimePlatform = new RuntimePlatform {
+                RuntimePlatform = new RuntimePlatform
+                {
                     OperatingSystemFamily = OperatingSystemFamily.LINUX,
                     CpuArchitecture = CpuArchitecture.ARM64
-                    },
+                },
             });
 
-            // AWS OTEL Collector Container
+            // Build the AWS OTEL Collector Container
+            DockerImageAsset awsOTELCollectorAsset = new DockerImageAsset(this, "AWSOTELCollectorAsset", new DockerImageAssetProps
+            {
+                Directory = Path.GetFullPath("../aws-otel-collector"),
+                Platform = Platform_.LINUX_ARM64,
+            });
+
+            // AWS OTEL Collector Container Definition
             ContainerDefinition awsOTELCollectorContainer = geolocationAPITaskDef.AddContainer("aws-otel-collector", new ContainerDefinitionOptions
             {
-                // Building the image out of band as opposed to building in the project until this is resolved for arm64 with CDK
-                // REF: https://github.com/aws/aws-cdk/issues/12472
-                //Image = ContainerImage.FromAsset(Path.GetFullPath("../aws-otel-collector")),
-                Image = ContainerImage.FromRegistry("carmenpuccio/aws-otel-collector:latest"),
+                Image = ContainerImage.FromDockerImageAsset(awsOTELCollectorAsset),
                 MemoryLimitMiB = 512,
                 Cpu = 256,
                 Command = new[] {
                     "--config=/etc/ecs/ecs-resource-detection.yaml"
                 },
                 Essential = true,
-                Logging = new AwsLogDriver(new AwsLogDriverProps {
+                Logging = new AwsLogDriver(new AwsLogDriverProps
+                {
                     LogGroup = geoLocationAPILogGroup,
                     StreamPrefix = "aws-otel-sidecar-collector"
                 }),
             });
 
-            // GeoLocationAPI Container
+            // Build the GeoLocationAPI Container
+            DockerImageAsset geolocationAPIAsset = new DockerImageAsset(this, "GeolocationAPIAsset", new DockerImageAssetProps
+            {
+                Directory = Path.GetFullPath("../GeoLocationAPI"),
+                Platform = Platform_.LINUX_ARM64
+            });
+
+            // GeoLocationAPI Container Definition
             ContainerDefinition geolocationAPIContainer = geolocationAPITaskDef.AddContainer("GeoLocationAPI", new ContainerDefinitionOptions
             {
-                // Building the image out of band as opposed to building in the project until this is resolved for arm64 with CDK
-                // REF: https://github.com/aws/aws-cdk/issues/12472
-                //Image = ContainerImage.FromAsset(Path.GetFullPath("../GeoLocationAPI")),
-                Image = ContainerImage.FromRegistry("carmenpuccio/geolocationapi:latest"),
+                Image = ContainerImage.FromDockerImageAsset(geolocationAPIAsset),
                 MemoryLimitMiB = 512,
                 Essential = true,
-                Logging = new AwsLogDriver(new AwsLogDriverProps { 
+                Logging = new AwsLogDriver(new AwsLogDriverProps
+                {
                     LogGroup = geoLocationAPILogGroup,
-                    StreamPrefix = "/geolocationapi-logs" 
+                    StreamPrefix = "geolocationapi-logs"
                 }),
                 Environment = new Dictionary<string, string>() {
-                    {"ASPNETCORE_URLS", "http://+:5000"},
+                    {"ASPNETCORE_URLS", "http://+:5254"},
                     {"ASPNETCORE_ENVIRONMENT", "Production"}
                 },
                 HealthCheck = new Amazon.CDK.AWS.ECS.HealthCheck
                 {
                     Command = new[] {
                         "CMD-SHELL",
-                        "wget --quiet --tries=1 --spider http://localhost:5000/hc || exit 1"
+                        "wget --quiet --tries=1 --spider http://localhost:5254/hc || exit 1"
                         },
                     Interval = Duration.Seconds(30),
                     Timeout = Duration.Seconds(30),
                     Retries = 5,
                     StartPeriod = Duration.Seconds(3)
                 },
-                PortMappings = new[] { new PortMapping { ContainerPort = 5000 } }
+                PortMappings = new[] { new PortMapping { ContainerPort = 5254 } }
             });
 
             geolocationAPIContainer.AddContainerDependencies(new ContainerDependency
@@ -166,7 +182,7 @@ namespace CdkGeoLocationApi
                 Port = 80,
                 Targets = new[] { geoLocationAPIService.LoadBalancerTarget( new LoadBalancerTargetOptions {
                     ContainerName = "GeoLocationAPI",
-                    ContainerPort = 5000
+                    ContainerPort = 5254
                 })},
                 HealthCheck = new Amazon.CDK.AWS.ElasticLoadBalancingV2.HealthCheck
                 {
@@ -178,6 +194,12 @@ namespace CdkGeoLocationApi
                 // Only drain containers for 10 seconds when stopping them.
                 // Increase if your app has long lived connections
                 DeregistrationDelay = Duration.Seconds(10)
+            });
+
+            // Create the CdkGeoLocationApiWafStack Nested Stack
+            CdkGeoLocationApiWafStack geoLocationAPISWafStack = new CdkGeoLocationApiWafStack(this, "GeoLocationAPIWafStack", new ResourceNestedStackProps
+            {
+                ALBResourceArn = lb.LoadBalancerArn
             });
 
             //Output the DNS where you can access your service

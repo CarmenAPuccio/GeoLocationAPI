@@ -6,7 +6,7 @@ services:
     build:
       context: ./GeoLocationAPI
     ports:
-      - "5000:5000"
+      - "5254:5254"
     depends_on:
       - aws-otel-collector
     restart: always

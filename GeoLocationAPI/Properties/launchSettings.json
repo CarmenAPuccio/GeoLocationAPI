@@ -4,7 +4,7 @@
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
     "iisExpress": {
-      "applicationUrl": "http://localhost:5000",
+      "applicationUrl": "http://localhost:5254",
       "sslPort": 0
     }
   },
@@ -19,10 +19,10 @@
     },
     "GeoLocationAPI": {
       "commandName": "Project",
-      "dotnetRunMessages": "true",
+      "dotnetRunMessages": true,
       "launchBrowser": true,
       "launchUrl": "swagger",
-      "applicationUrl": "http://localhost:5000",
+      "applicationUrl": "http://localhost:5254",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
