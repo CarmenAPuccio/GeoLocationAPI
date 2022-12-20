@@ -25,7 +25,7 @@ namespace GeoLocationAPI.V1.HealthChecks
         {
             // No validation done on the url below.
             // Ensure that the HealtcheckBaseURL value from appsettings.json has a trailing slash.
-            // ex: "HealtcheckBaseURL": "http://localhost:5000/api/v1/geolocation/"
+            // ex: "HealtcheckBaseURL": "http://localhost:5254/api/v1/geolocation/"
             string url = _healthcheckBaseURL + _healtcheckIPToTest;
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.TryAddWithoutValidation("From", "GeoLocationHealthCheck@example.com");
