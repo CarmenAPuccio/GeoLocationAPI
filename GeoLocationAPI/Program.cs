@@ -1,6 +1,7 @@
 using GeoLocationAPI.Swagger;
 using GeoLocationAPI.V1.HealthChecks;
 using GeoLocationAPI.V1.Services;
+using GeoLocationAPI.V1.Helpers;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
@@ -28,7 +29,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-//builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddApiVersioning(
 
     options =>
@@ -49,6 +49,7 @@ builder.Services.AddVersionedApiExplorer(
         options.SubstituteApiVersionInUrl = true;
     });
 builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
+builder.Services.AddSingleton<Instrumentation>();
 
 builder.Services.AddSwaggerGen(
         options =>
@@ -60,8 +61,6 @@ builder.Services.AddSwaggerGen(
             var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
             options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
 
-            // integrate xml comments
-            //options.IncludeXmlComments(xmlFilename);
 
         });
 
@@ -75,6 +74,7 @@ Sdk.CreateTracerProviderBuilder()
     .AddXRayTraceId()
     .AddAWSInstrumentation()
     .AddAspNetCoreInstrumentation()
+    .AddSource(Instrumentation.ActivitySourceName)
     .AddHttpClientInstrumentation()
     .AddOtlpExporter(otlpOptions =>
     {
