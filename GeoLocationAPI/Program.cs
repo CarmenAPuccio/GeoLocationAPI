@@ -100,7 +100,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders =
     ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Add(new IPNetwork(IPAddress.Parse(builder.Configuration["ProxyInformation:ProxyKnownNetwork"]), Int32.Parse(builder.Configuration["ProxyInformation:ProxyKnownNetworkCIDR"])));
+    options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse(builder.Configuration["ProxyInformation:ProxyKnownNetwork"]), Int32.Parse(builder.Configuration["ProxyInformation:ProxyKnownNetworkCIDR"])));
     options.ForwardLimit = null;
 
 });
