@@ -107,7 +107,7 @@ public sealed class StackTests
         Assert.Contains("xray:PutTraceSegments", Actions(xray));
 
         var logs = statements.Single(s => Actions(s).All(a => a.StartsWith("logs:", StringComparison.Ordinal)));
-        Assert.Contains(":log-group:/aws/ecs/application/*", logs.GetProperty("Resource").ToString(), StringComparison.Ordinal);
+        Assert.Contains(":log-group:/geolocationapi/otel/*", logs.GetProperty("Resource").ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public sealed class StackTests
         Assert.All(groups, g => Assert.Equal(180, g.GetProperty("RetentionInDays").GetInt32()));
 
         var collectorConfig = File.ReadAllText(Path.Combine(_stack.RepositoryRoot, "aws-otel-collector", "ecs-resource-detection.yaml"));
-        foreach (var name in new[] { "/aws/ecs/application/metrics", "/aws/ecs/application/logs" })
+        foreach (var name in new[] { "/geolocationapi/otel/metrics", "/geolocationapi/otel/logs" })
         {
             Assert.Contains(groups, g => g.TryGetProperty("LogGroupName", out var n) && n.GetString() == name);
             Assert.Contains(name, collectorConfig, StringComparison.Ordinal);

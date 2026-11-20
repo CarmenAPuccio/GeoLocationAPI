@@ -47,14 +47,14 @@ namespace CdkGeoLocationApi
             // aws-otel-collector/ecs-resource-detection.yaml.
             LogGroup otelMetricsLogGroup = new LogGroup(this, "OtelMetricsLogGroup", new LogGroupProps
             {
-                LogGroupName = "/aws/ecs/application/metrics",
+                LogGroupName = "/geolocationapi/otel/metrics",
                 Retention = RetentionDays.SIX_MONTHS,
                 RemovalPolicy = RemovalPolicy.DESTROY
             });
 
             LogGroup otelLogsLogGroup = new LogGroup(this, "OtelLogsLogGroup", new LogGroupProps
             {
-                LogGroupName = "/aws/ecs/application/logs",
+                LogGroupName = "/geolocationapi/otel/logs",
                 Retention = RetentionDays.SIX_MONTHS,
                 RemovalPolicy = RemovalPolicy.DESTROY
             });
@@ -87,7 +87,7 @@ namespace CdkGeoLocationApi
                     {
                         Service = "logs",
                         Resource = "log-group",
-                        ResourceName = "/aws/ecs/application/*",
+                        ResourceName = "/geolocationapi/otel/*",
                         ArnFormat = ArnFormat.COLON_RESOURCE_NAME
                     })
                 },

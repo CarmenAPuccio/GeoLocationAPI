@@ -24,7 +24,7 @@ processors:
     timeout: 60s
   batch/logs:
     timeout: 5s
-  resourcedetection/ecs:
+  resource_detection/ecs:
     detectors: [env, ecs]
     timeout: 2s
     override: false
@@ -35,23 +35,23 @@ exporters:
   awsxray:
   awsemf:
     namespace: ECS/AWSOTel/Application
-    log_group_name: '/aws/ecs/application/metrics'
+    log_group_name: '/geolocationapi/otel/metrics'
   awscloudwatchlogs:
-    log_group_name: '/aws/ecs/application/logs'
+    log_group_name: '/geolocationapi/otel/logs'
     log_stream_name: geolocationapi
 
 service:
   pipelines:
     traces:
       receivers: [otlp, awsxray]
-      processors: [resourcedetection/ecs, batch/traces]
+      processors: [resource_detection/ecs, batch/traces]
       exporters: [awsxray]
     metrics:
       receivers: [otlp, statsd]
-      processors: [resourcedetection/ecs, batch/metrics]
+      processors: [resource_detection/ecs, batch/metrics]
       exporters: [awsemf]
     logs:
       receivers: [otlp]
-      processors: [resourcedetection/ecs, batch/logs]
+      processors: [resource_detection/ecs, batch/logs]
       exporters: [awscloudwatchlogs]
   extensions: [health_check]
