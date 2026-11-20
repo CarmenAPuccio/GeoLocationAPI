@@ -25,11 +25,12 @@ namespace GeoLocationAPI.V1.HealthChecks
             try
             {
                 var result = _geoLocationService.GetGeoLocation(_ipToTest);
+                var data = new Dictionary<string, object> { ["ipAddress"] = result.IPAddress };
 
                 return Task.FromResult(result.IPFoundInGeoDB
-                    ? HealthCheckResult.Healthy("The healthcheck is healthy - " + result.Message)
+                    ? HealthCheckResult.Healthy("The healthcheck is healthy - " + result.Message, data)
                     : new HealthCheckResult(context.Registration.FailureStatus,
-                        "The healthcheck indicates an unhealthy result. " + result.Message));
+                        "The healthcheck indicates an unhealthy result. " + result.Message, data: data));
             }
             catch (Exception ex)
             {

@@ -74,7 +74,7 @@ var openTelemetry = builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource.AddService(
         serviceName: "GeoLocationAPI",
         serviceNamespace: "GeoLocation",
-        serviceVersion: typeof(Instrumentation).Assembly.GetName().Version?.ToString(),
+        serviceVersion: Instrumentation.Version,
         autoGenerateServiceInstanceId: false))
     .WithTracing(tracing => tracing
         .AddXRayTraceId()

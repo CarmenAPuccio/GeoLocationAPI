@@ -11,14 +11,17 @@ public sealed class Instrumentation : IDisposable
 {
     internal const string ActivitySourceName = "GeoLocationAPI";
 
+    /// <summary>
+    /// The assembly version. A loaded assembly always has one.
+    /// </summary>
+    internal static readonly string Version = typeof(Instrumentation).Assembly.GetName().Version!.ToString();
+
     private readonly Meter _meter;
 
     public Instrumentation()
     {
-        string? version = typeof(Instrumentation).Assembly.GetName().Version?.ToString();
-
-        ActivitySource = new ActivitySource(ActivitySourceName, version);
-        _meter = new Meter(ActivitySourceName, version);
+        ActivitySource = new ActivitySource(ActivitySourceName, Version);
+        _meter = new Meter(ActivitySourceName, Version);
         LookupCounter = _meter.CreateCounter<long>(
             "geolocation.lookups",
             unit: "{lookup}",
