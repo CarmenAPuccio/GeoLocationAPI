@@ -59,15 +59,28 @@ public sealed class WafStackTests
 
         bool Allowed(string path) => patterns.Any(p => p.IsMatch(path));
 
-        Assert.True(Allowed("/hc"));
-        Assert.True(Allowed("/HC"));
-        Assert.True(Allowed("/api/v1/geolocation"));
-        Assert.True(Allowed("/api/v1/geolocation/8.8.8.8"));
-        Assert.True(Allowed("/api/V2/GeoLocation/8.8.8.8"));
-        Assert.False(Allowed("/"));
-        Assert.False(Allowed("/admin"));
-        Assert.False(Allowed("/scalar/v1"));
-        Assert.False(Allowed("/api/v1/other"));
+        // The API and the health check, with any casing, version number and an optional trailing slash.
+        foreach (var path in new[]
+        {
+            "/hc", "/HC", "/hc/",
+            "/api/v1/geolocation", "/api/v1/geolocation/", "/api/v1/geolocation/8.8.8.8",
+            "/api/V12/GeoLocation/2001:4860:4860::8888",
+        })
+        {
+            Assert.True(Allowed(path), $"{path} should be allowed");
+        }
+
+        // Everything else, including paths that merely contain an allowed path.
+        foreach (var path in new[]
+        {
+            "/", "/admin", "/scalar/v1", "/openapi/v1.json", "/api/v1/other",
+            "/x/hc", "/hcx", "/hc/extra", "/hc\n",
+            "/api/v1/geolocation/8.8.8.8/extra", "/api/v1/geolocationx", "/xapi/v1/geolocation", "/api/v/geolocation",
+            "/admin/api/v1/geolocation",
+        })
+        {
+            Assert.False(Allowed(path), $"{path} should be blocked");
+        }
     }
 
     [Fact]

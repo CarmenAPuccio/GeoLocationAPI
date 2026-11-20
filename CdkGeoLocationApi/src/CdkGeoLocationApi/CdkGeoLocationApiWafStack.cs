@@ -194,7 +194,8 @@ namespace CdkGeoLocationApi
                                     new StatementProperty {
                                         RegexMatchStatement = new RegexMatchStatementProperty
                                         {
-                                            RegexString = "((?i)\\/hc)",
+                                            // Anchored so only the health check path matches, not any path that happens to contain /hc.
+                                            RegexString = "(?i)^/hc/?\\z",
                                             FieldToMatch = new FieldToMatchProperty
                                             {
                                                 UriPath = new Dictionary<string, object> { }
@@ -208,8 +209,9 @@ namespace CdkGeoLocationApi
                                     new StatementProperty {
                                         RegexMatchStatement = new RegexMatchStatementProperty
                                         {
-                                            //AWS WAF supports the pattern syntax used by the PCRE library libpcre
-                                            RegexString = "((?i)\\/api\\/V[0-9]\\/geolocation.*)",
+                                            // AWS WAF supports the pattern syntax used by the PCRE library libpcre.
+                                            // Matches /api/v1/geolocation, /api/v1/geolocation/ and /api/v1/geolocation/{ip}, and nothing else.
+                                            RegexString = "(?i)^/api/v[0-9]+/geolocation(/[^/]*)?\\z",
                                             FieldToMatch = new FieldToMatchProperty
                                             {
                                                 UriPath = new Dictionary<string, object> { }
