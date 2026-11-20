@@ -9,10 +9,14 @@
 **/node_modules
 **/*.user
 **/.env
-**/Dockerfile*
 **/compose*.yaml
 **/.dockerignore
 CdkGeoLocationApi
 GeoLocationAPI.Tests
 aws-otel-collector
 README.md
+templates
+LICENSE
+GeoLocationAPI.sln
+**/.gitignore
+**/.gitattributes

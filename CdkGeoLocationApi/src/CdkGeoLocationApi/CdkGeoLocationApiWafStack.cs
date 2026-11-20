@@ -7,11 +7,11 @@ using System.Collections.Generic;
 
 namespace CdkGeoLocationApi
 {
-    class ResourceNestedStackProps : NestedStackProps
+    sealed class ResourceNestedStackProps : NestedStackProps
     {
-        public string ALBResourceArn { get; set; }
+        public required string ALBResourceArn { get; init; }
     }
-    class CdkGeoLocationApiWafStack : NestedStack
+    sealed class CdkGeoLocationApiWafStack : NestedStack
     {
         public CdkGeoLocationApiWafStack(Construct scope, string id, ResourceNestedStackProps props) : base(scope, id, props)
         {

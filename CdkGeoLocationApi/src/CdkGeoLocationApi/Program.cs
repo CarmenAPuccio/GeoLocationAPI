@@ -1,13 +1,13 @@
-﻿using Amazon.CDK;
+using Amazon.CDK;
 
 namespace CdkGeoLocationApi
 {
-    sealed class Program
+    internal static class Program
     {
-        public static void Main(string[] args)
+        public static void Main()
         {
             var app = new App();
-            new CdkGeoLocationApiStack(app, "CdkGeoLocationApiStack", new StackProps { });
+            new CdkGeoLocationApiStack(app, "CdkGeoLocationApiStack", new StackProps());
             app.Synth();
         }
     }

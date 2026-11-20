@@ -1,4 +1,3 @@
-using Constructs;
 using Amazon.CDK;
 using Amazon.CDK.AWS.EC2;
 using Amazon.CDK.AWS.Ecr.Assets;
@@ -6,6 +5,7 @@ using Amazon.CDK.AWS.ECS;
 using Amazon.CDK.AWS.ElasticLoadBalancingV2;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Logs;
+using Constructs;
 using System.Collections.Generic;
 using System.IO;
 
@@ -13,10 +13,12 @@ namespace CdkGeoLocationApi
 {
     public class CdkGeoLocationApiStack : Stack
     {
-        internal CdkGeoLocationApiStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+        private const int ApiPort = 5254;
+
+        internal CdkGeoLocationApiStack(Construct scope, string id, IStackProps? props = null) : base(scope, id, props)
         {
             // Create the VPC
-            // NOTE: Make sure the CIDR is the same as what's set in the appsettings.json for the GeoLocationAPI project
+            // NOTE: Make sure the CIDR is the same as ProxyInformation in the GeoLocationAPI appsettings.Production.json
             Vpc geoLocationAPIVPC = new Vpc(this, "GeoLocationAPIVPC", new VpcProps
             {
                 IpAddresses = IpAddresses.Cidr("172.25.0.0/16"),
@@ -27,43 +29,70 @@ namespace CdkGeoLocationApi
             Cluster geoLocationAPICluster = new Cluster(this, "GeoLocationAPICluster", new ClusterProps
             {
                 Vpc = geoLocationAPIVPC,
-                ContainerInsights = true
+                ContainerInsightsV2 = ContainerInsights.ENABLED
             });
 
-            // Create the LogGroup
+            // Container stdout/stderr (awslogs driver)
             LogGroup geoLocationAPILogGroup = new LogGroup(this, "GeoLocationAPILogGroup", new LogGroupProps
             {
-                LogGroupName = "/geolocationapi-logs",
                 Retention = RetentionDays.SIX_MONTHS,
                 RemovalPolicy = RemovalPolicy.DESTROY
             });
 
-            // The IAM role assumed by the task and its containers
+            // Log groups the OpenTelemetry collector writes to. These names must match
+            // aws-otel-collector/ecs-resource-detection.yaml.
+            LogGroup otelMetricsLogGroup = new LogGroup(this, "OtelMetricsLogGroup", new LogGroupProps
+            {
+                LogGroupName = "/aws/ecs/application/metrics",
+                Retention = RetentionDays.SIX_MONTHS,
+                RemovalPolicy = RemovalPolicy.DESTROY
+            });
+
+            LogGroup otelLogsLogGroup = new LogGroup(this, "OtelLogsLogGroup", new LogGroupProps
+            {
+                LogGroupName = "/aws/ecs/application/logs",
+                Retention = RetentionDays.SIX_MONTHS,
+                RemovalPolicy = RemovalPolicy.DESTROY
+            });
+
+            // The role the containers run as. Pulling images and the awslogs driver use the task execution role,
+            // which CDK creates with the permissions it needs. This role only holds what the collector needs.
             Role geoLocationAPITaskRole = new Role(this, "GeoLocationAPITaskRole", new RoleProps
             {
                 AssumedBy = new ServicePrincipal("ecs-tasks.amazonaws.com"),
-                RoleName = "GeoLocationAPITaskRole",
-                Description = "Role for the GeoLocationAPITaskRole Task Definition"
+                Description = "Role for the GeoLocationAPI task. Lets the OpenTelemetry collector export traces, metrics and logs."
             });
 
+            // X-Ray does not support resource-level permissions for these actions.
             geoLocationAPITaskRole.AddToPolicy(new PolicyStatement(new PolicyStatementProps
             {
                 Resources = new[] { "*" },
                 Actions = new[] {
-                    "ecr:GetAuthorizationToken",
-                    "ecr:BatchCheckLayerAvailability",
-                    "ecr:GetDownloadUrlForLayer",
-                    "ecr:BatchGetImage",
-                    "logs:CreateLogStream",
-                    "logs:CreateLogGroup",
-                    "logs:DescribeLogStreams",
-                    "logs:PutLogEvents",
                     "xray:PutTraceSegments",
                     "xray:PutTelemetryRecords",
                     "xray:GetSamplingRules",
                     "xray:GetSamplingTargets",
-                    "xray:GetSamplingStatisticSummaries",
-                    "ssm:GetParameters"
+                    "xray:GetSamplingStatisticSummaries"
+                }
+            }));
+
+            geoLocationAPITaskRole.AddToPolicy(new PolicyStatement(new PolicyStatementProps
+            {
+                Resources = new[] {
+                    FormatArn(new ArnComponents
+                    {
+                        Service = "logs",
+                        Resource = "log-group",
+                        ResourceName = "/aws/ecs/application/*",
+                        ArnFormat = ArnFormat.COLON_RESOURCE_NAME
+                    })
+                },
+                Actions = new[] {
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:DescribeLogStreams",
+                    "logs:PutLogEvents",
+                    "logs:PutRetentionPolicy"
                 }
             }));
 
@@ -74,13 +103,13 @@ namespace CdkGeoLocationApi
                 AllowAllOutbound = true
             });
 
-            // GeoLocationAPI Service task definition
-            TaskDefinition geolocationAPITaskDef = new TaskDefinition(this, "GeolocationAPITaskDef", new TaskDefinitionProps
+            // GeoLocationAPI Service task definition. The API is small, so 0.5 vCPU and 1 GiB are enough
+            // for both containers (512 MiB each).
+            FargateTaskDefinition geolocationAPITaskDef = new FargateTaskDefinition(this, "GeolocationAPITaskDef", new FargateTaskDefinitionProps
             {
                 Family = "GeoLocationAPI",
-                Compatibility = Compatibility.FARGATE,
-                Cpu = "1024",
-                MemoryMiB = "4096",
+                Cpu = 512,
+                MemoryLimitMiB = 1024,
                 TaskRole = geoLocationAPITaskRole,
                 RuntimePlatform = new RuntimePlatform
                 {
@@ -89,10 +118,15 @@ namespace CdkGeoLocationApi
                 },
             });
 
+            // The Docker build context is the repository root, because Directory.Build.props,
+            // Directory.Packages.props and global.json live there. The .dockerignore at the root keeps
+            // everything else out. cdk runs from the CdkGeoLocationApi directory.
+            string repositoryRoot = Path.GetFullPath("..");
+
             // Build the AWS OTEL Collector Container
             DockerImageAsset awsOTELCollectorAsset = new DockerImageAsset(this, "AWSOTELCollectorAsset", new DockerImageAssetProps
             {
-                Directory = Path.GetFullPath("../aws-otel-collector"),
+                Directory = Path.Combine(repositoryRoot, "aws-otel-collector"),
                 Platform = Platform_.LINUX_ARM64,
             });
 
@@ -101,7 +135,7 @@ namespace CdkGeoLocationApi
             {
                 Image = ContainerImage.FromDockerImageAsset(awsOTELCollectorAsset),
                 MemoryLimitMiB = 512,
-                Cpu = 256,
+                Cpu = 128,
                 Command = new[] {
                     "--config=/etc/ecs/ecs-resource-detection.yaml"
                 },
@@ -116,15 +150,18 @@ namespace CdkGeoLocationApi
             // Build the GeoLocationAPI Container
             DockerImageAsset geolocationAPIAsset = new DockerImageAsset(this, "GeolocationAPIAsset", new DockerImageAssetProps
             {
-                Directory = Path.GetFullPath("../GeoLocationAPI"),
+                Directory = repositoryRoot,
+                File = "GeoLocationAPI/Dockerfile",
                 Platform = Platform_.LINUX_ARM64
             });
 
-            // GeoLocationAPI Container Definition
+            // GeoLocationAPI Container Definition. The port comes from the image (ASPNETCORE_HTTP_PORTS) and the
+            // OTLP endpoint defaults to http://localhost:4317, which reaches the collector container in this task.
             ContainerDefinition geolocationAPIContainer = geolocationAPITaskDef.AddContainer("GeoLocationAPI", new ContainerDefinitionOptions
             {
                 Image = ContainerImage.FromDockerImageAsset(geolocationAPIAsset),
                 MemoryLimitMiB = 512,
+                Cpu = 384,
                 Essential = true,
                 Logging = new AwsLogDriver(new AwsLogDriverProps
                 {
@@ -132,21 +169,20 @@ namespace CdkGeoLocationApi
                     StreamPrefix = "geolocationapi-logs"
                 }),
                 Environment = new Dictionary<string, string>() {
-                    {"ASPNETCORE_URLS", "http://+:5254"},
                     {"ASPNETCORE_ENVIRONMENT", "Production"}
                 },
                 HealthCheck = new Amazon.CDK.AWS.ECS.HealthCheck
                 {
                     Command = new[] {
                         "CMD-SHELL",
-                        "wget --quiet --tries=1 --spider http://localhost:5254/hc || exit 1"
-                        },
+                        $"wget --quiet --tries=1 --spider http://localhost:{ApiPort}/hc || exit 1"
+                    },
                     Interval = Duration.Seconds(30),
-                    Timeout = Duration.Seconds(30),
-                    Retries = 5,
-                    StartPeriod = Duration.Seconds(3)
+                    Timeout = Duration.Seconds(5),
+                    Retries = 3,
+                    StartPeriod = Duration.Seconds(30)
                 },
-                PortMappings = new[] { new PortMapping { ContainerPort = 5254 } }
+                PortMappings = new[] { new PortMapping { ContainerPort = ApiPort } }
             });
 
             geolocationAPIContainer.AddContainerDependencies(new ContainerDependency
@@ -164,7 +200,9 @@ namespace CdkGeoLocationApi
                 SecurityGroups = new[] { geolocationapiSG },
                 AssignPublicIp = false,
                 MaxHealthyPercent = 200,
-                MinHealthyPercent = 100
+                MinHealthyPercent = 100,
+                // Roll back automatically if a deployment's tasks keep failing.
+                CircuitBreaker = new DeploymentCircuitBreaker { Rollback = true }
             });
 
             // Create ALB - elbv2 automatically creates LB security group
@@ -180,9 +218,9 @@ namespace CdkGeoLocationApi
             listener.AddTargets("GeoLocationAPI", new AddApplicationTargetsProps
             {
                 Port = 80,
-                Targets = new[] { geoLocationAPIService.LoadBalancerTarget( new LoadBalancerTargetOptions {
+                Targets = new[] { geoLocationAPIService.LoadBalancerTarget(new LoadBalancerTargetOptions {
                     ContainerName = "GeoLocationAPI",
-                    ContainerPort = 5254
+                    ContainerPort = ApiPort
                 })},
                 HealthCheck = new Amazon.CDK.AWS.ElasticLoadBalancingV2.HealthCheck
                 {
@@ -197,7 +235,7 @@ namespace CdkGeoLocationApi
             });
 
             // Create the CdkGeoLocationApiWafStack Nested Stack
-            CdkGeoLocationApiWafStack geoLocationAPISWafStack = new CdkGeoLocationApiWafStack(this, "GeoLocationAPIWafStack", new ResourceNestedStackProps
+            new CdkGeoLocationApiWafStack(this, "GeoLocationAPIWafStack", new ResourceNestedStackProps
             {
                 ALBResourceArn = lb.LoadBalancerArn
             });
