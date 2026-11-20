@@ -136,6 +136,16 @@ public sealed class TelemetryPipelineTests : IDisposable
     }
 
     [Fact]
+    public void Metrics_AreSentAsDeltas()
+    {
+        // The collector's CloudWatch (EMF) exporter drops the first interval of every cumulative series,
+        // because it has nothing to subtract. Deltas need no baseline, so no counts are lost after a task starts.
+        var reader = _factory.Services.GetRequiredService<IOptionsMonitor<MetricReaderOptions>>().Get(name: null);
+
+        Assert.Equal(MetricReaderTemporalityPreference.Delta, reader.TemporalityPreference);
+    }
+
+    [Fact]
     public void Production_KeepsOnlyWarningsOnTheConsole()
     {
         using var production = new ProductionApiFactory();
