@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: geolocationapi
+  labels:
+    name: geolocationapi
+--- 
+apiVersion: v1
+kind: Service
+metadata: 
+  labels: 
+    app: geolocationapi
+  name: geolocationapi
+  namespace: geolocationapi
+spec: 
+  ports: 
+    - 
+      name: http
+      port: 5254
+      protocol: TCP
+      targetPort: 5254
+  selector: 
+    app: geolocationapi
+--- 
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  labels: 
+    app: geolocationapi
+  name: geolocationapi
+  namespace: geolocationapi
+spec: 
+  replicas: 2
+  selector: 
+    matchLabels: 
+      app: geolocationapi
+  strategy: 
+    type: Recreate
+  template: 
+    metadata: 
+      labels: 
+        app: geolocationapi
+    spec: 
+      containers: 
+        - image: "carmenpuccio/aws-otel-collector:latest"
+          name: aws-otel-collector           
+        - image: "carmenpuccio/geolocationapi:latest"
+          name: geolocationapi
+          env: 
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            # The port (5254) is set in the image. The OTLP endpoint defaults to http://localhost:4317,
+            # which reaches the collector container in this pod.
+          ports: 
+            - containerPort: 5254
+              name: geolocationapi
+          livenessProbe:
+            httpGet:
+              path: /hc
+              port: 5254
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /hc
+              port: 5254
+            initialDelaySeconds: 5
+            timeoutSeconds: 1  
