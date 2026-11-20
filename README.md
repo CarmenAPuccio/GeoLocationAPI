@@ -3,7 +3,7 @@
 
 ## Prerequisites
 To get started you will need:
-- [Docker](https://docs.docker.com/install/) installed on your local machine.
+- A container tool for running the containers locally. These instructions use [Finch](https://github.com/runfinch/finch) (`finch vm init` once to create its VM). Docker works too: replace `finch` with `docker`.
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (LTS). `global.json` pins the SDK major version.
 - An IDE for building .NET applications such as [Visual Studio](https://visualstudio.microsoft.com/)
 ## Running Locally
@@ -24,9 +24,9 @@ Sample URL's:
 - Healthcheck:
   - http://localhost:5254/hc
 
-You can also run the project in Docker by running:
+You can also run the project in containers (the API plus a local OpenTelemetry collector that prints telemetry to its log) by running:
 ```sh
-docker-compose -f docker-compose.yml -f docker-compose.development.yml up
+finch compose -f compose.yaml -f compose.development.yaml up --build
 ```
 Once the container is up and running you can simply do something like this:
 
@@ -88,7 +88,6 @@ Sample Payload:
 
 The [AWS CDK](https://aws.amazon.com/cdk/) is used to deploy the application to [ECS Fargate](https://aws.amazon.com/fargate/) and is protected with [AWS WAF](https://aws.amazon.com/waf/) via the CDK for C#. Follow the instructions in the [README.md](CdkGeoLocationApi/README.md).
 
-Alternatively, you can use the [Docker Compose for Amazon ECS](https://docs.docker.com/cloud/ecs-integration/) integration to launch the application to ECS Fargate by using the Docker CLI. You can look at [docker-compose-ecs-demo.yml](docker-compose-ecs-demo.yml) to see a simple example. **Note:** the GeoLocationAPI project uses [OpenTelemetry](https://opentelemetry.io/) and since the Docker Compose for Amazon ECS integration currently doesn't support creating sidecars in the task definition, this simple example doesn't showcase the [aws-otel-collector](https://github.com/aws-observability/aws-otel-collector). To see that functionality, deploy with the CDK instead as mentioned above in the [README.md](CdkGeoLocationApi/README.md).
 ## Running on Kubernetes
 
 To deploy to an existing Kubernetes cluster:

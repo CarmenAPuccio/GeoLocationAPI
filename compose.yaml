@@ -1,0 +1,27 @@
+# Run with Finch:  finch compose up --build
+# Add compose.development.yaml to enable the Scalar API reference and console trace output:
+#   finch compose -f compose.yaml -f compose.development.yaml up --build
+services:
+  geolocationapi:
+    image: geolocationapi
+    build:
+      context: .
+      dockerfile: GeoLocationAPI/Dockerfile
+    ports:
+      - "5254:5254"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aws-otel-collector:4317
+      OTEL_SERVICE_NAME: GeoLocationAPI
+    depends_on:
+      - aws-otel-collector
+    restart: unless-stopped
+
+  # Local collector that prints telemetry to its log. It needs no AWS credentials.
+  # The ECS task uses ecs-resource-detection.yaml instead, which exports to X-Ray, CloudWatch metrics and logs.
+  aws-otel-collector:
+    image: aws-otel-collector-local
+    build:
+      context: ./aws-otel-collector
+    command: ["--config=/etc/otel/local.yaml"]
+    restart: unless-stopped

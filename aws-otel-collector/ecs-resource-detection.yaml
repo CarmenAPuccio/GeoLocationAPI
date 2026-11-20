@@ -1,3 +1,4 @@
+# ECS sidecar configuration. Traces go to X-Ray, metrics to CloudWatch (EMF) and logs to CloudWatch Logs.
 extensions:
   health_check:
 
@@ -7,7 +8,7 @@ receivers:
       grpc:
         endpoint: 0.0.0.0:4317
       http:
-        endpoint: 0.0.0.0:55681
+        endpoint: 0.0.0.0:4318
   awsxray:
     endpoint: 0.0.0.0:2000
     transport: udp
@@ -21,29 +22,36 @@ processors:
     send_batch_size: 50
   batch/metrics:
     timeout: 60s
-  resourcedetection:
+  batch/logs:
+    timeout: 5s
   resourcedetection/ecs:
     detectors: [env, ecs]
     timeout: 2s
     override: false
 
 exporters:
-  logging:
-    loglevel: debug
+  debug:
+    verbosity: basic
   awsxray:
   awsemf:
     namespace: ECS/AWSOTel/Application
     log_group_name: '/aws/ecs/application/metrics'
+  awscloudwatchlogs:
+    log_group_name: '/aws/ecs/application/logs'
+    log_stream_name: geolocationapi
 
 service:
   pipelines:
     traces:
-      receivers: [otlp,awsxray]
+      receivers: [otlp, awsxray]
       processors: [resourcedetection/ecs, batch/traces]
       exporters: [awsxray]
     metrics:
       receivers: [otlp, statsd]
       processors: [resourcedetection/ecs, batch/metrics]
       exporters: [awsemf]
-
+    logs:
+      receivers: [otlp]
+      processors: [resourcedetection/ecs, batch/logs]
+      exporters: [awscloudwatchlogs]
   extensions: [health_check]
