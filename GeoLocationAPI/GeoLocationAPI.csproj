@@ -12,13 +12,13 @@
     <PackageReference Include="MaxMind.GeoIP2" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="OpenTelemetry" />
-    <PackageReference Include="OpenTelemetry.Contrib.Extensions.AWSXRay" />
-    <PackageReference Include="OpenTelemetry.Contrib.Instrumentation.AWS" />
     <PackageReference Include="OpenTelemetry.Exporter.Console" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.AWS" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
     <PackageReference Include="Scalar.AspNetCore" />
   </ItemGroup>
 

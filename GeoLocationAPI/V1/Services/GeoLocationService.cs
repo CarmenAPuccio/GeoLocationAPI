@@ -14,7 +14,7 @@ namespace GeoLocationAPI.V1.Services
     public sealed partial class GeoLocationService : IGeoLocationService, IDisposable
     {
         private readonly ILogger<GeoLocationService> _logger;
-        private readonly ActivitySource _activitySource;
+        private readonly Instrumentation _instrumentation;
         private readonly DatabaseReader _reader;
 
         public GeoLocationService(
@@ -26,7 +26,7 @@ namespace GeoLocationAPI.V1.Services
             ArgumentNullException.ThrowIfNull(instrumentation);
 
             _logger = logger;
-            _activitySource = instrumentation.ActivitySource;
+            _instrumentation = instrumentation;
             _reader = new DatabaseReader(dbSettings.Value.ResolvedPath);
         }
 
@@ -35,7 +35,7 @@ namespace GeoLocationAPI.V1.Services
         {
             ArgumentNullException.ThrowIfNull(ipAddress);
 
-            using var activity = _activitySource.StartActivity("GetGeoLocation");
+            using var activity = _instrumentation.ActivitySource.StartActivity("GetGeoLocation");
 
             var address = ipAddress.ToString();
             var response = new GeoLocation(address) { Date = DateTime.UtcNow };
@@ -57,6 +57,7 @@ namespace GeoLocationAPI.V1.Services
             }
 
             activity?.SetTag("geolocation.found", response.IPFoundInGeoDB);
+            _instrumentation.LookupCounter.Add(1, new KeyValuePair<string, object?>("geolocation.found", response.IPFoundInGeoDB));
             activity?.SetStatus(ActivityStatusCode.Ok);
             return response;
         }

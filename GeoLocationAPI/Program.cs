@@ -9,7 +9,9 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using OpenTelemetry;
-using OpenTelemetry.Contrib.Extensions.AWSXRay.Trace;
+using OpenTelemetry.Extensions.AWS.Trace;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
@@ -65,25 +67,32 @@ builder.Services.AddApiVersioning(options =>
 
 builder.Services.AddSingleton<Instrumentation>();
 
-Sdk.CreateTracerProviderBuilder()
-    .SetResourceBuilder(
-        ResourceBuilder.CreateDefault().AddService(
-            Required("ServiceName"),
-            serviceNamespace: "GeoLocation",
-            autoGenerateServiceInstanceId: false)
-        .AddTelemetrySdk())
-    .AddXRayTraceId()
-    .AddAWSInstrumentation()
-    .AddAspNetCoreInstrumentation()
-    .AddSource(Instrumentation.ActivitySourceName)
-    .AddHttpClientInstrumentation()
-    .AddOtlpExporter(otlpOptions =>
-    {
-        otlpOptions.Endpoint = new Uri(Required("OTEL_OTLP_ENDPOINT"));
-    })
-    .AddConsoleExporter()
-    .Build();
+// Traces, metrics and logs are exported over OTLP. The endpoint, protocol and service name come from the
+// standard OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_PROTOCOL and OTEL_SERVICE_NAME environment variables.
+// With none set, the SDK exports gRPC to http://localhost:4317 as "GeoLocationAPI".
+var openTelemetry = builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService(
+        serviceName: "GeoLocationAPI",
+        serviceNamespace: "GeoLocation",
+        serviceVersion: typeof(Instrumentation).Assembly.GetName().Version?.ToString(),
+        autoGenerateServiceInstanceId: false))
+    .WithTracing(tracing => tracing
+        .AddXRayTraceId()
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddSource(Instrumentation.ActivitySourceName))
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddRuntimeInstrumentation()
+        .AddMeter(Instrumentation.ActivitySourceName))
+    .WithLogging()
+    .UseOtlpExporter();
 
+if (builder.Environment.IsDevelopment())
+{
+    openTelemetry.WithTracing(tracing => tracing.AddConsoleExporter());
+}
 
 Sdk.SetDefaultTextMapPropagator(new AWSXRayPropagator());
 
@@ -103,11 +112,10 @@ builder.Services.AddOptions<ProxyInformation>()
 
 builder.Services.AddSingleton<IGeoLocationService, GeoLocationService>();
 
-// The key name keeps its historical spelling because deployed environments already set it.
-var healthCheckIp = Required("HealtcheckIPToTest");
+var healthCheckIp = Required("HealthCheck:IpToTest");
 if (!IPAddress.TryParse(healthCheckIp, out _))
 {
-    throw new InvalidOperationException("HealtcheckIPToTest is not a valid IP address.");
+    throw new InvalidOperationException("HealthCheck:IpToTest is not a valid IP address.");
 }
 
 builder.Services.AddHealthChecks()

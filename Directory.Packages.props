@@ -8,16 +8,15 @@
     <PackageVersion Include="Asp.Versioning.OpenApi" Version="10.2.3" />
     <PackageVersion Include="MaxMind.GeoIP2" Version="6.2.0" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
-    <!-- Pinned: OpenTelemetry.Contrib.Extensions.AWSXRay 1.2.0 depends on the vulnerable 11.0.1. -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="OpenTelemetry" Version="1.21.0" />
-    <PackageVersion Include="OpenTelemetry.Contrib.Extensions.AWSXRay" Version="1.2.0" />
-    <PackageVersion Include="OpenTelemetry.Contrib.Instrumentation.AWS" Version="1.0.2" />
     <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.AWS" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.21.0" />
     <PackageVersion Include="Scalar.AspNetCore" Version="3.1.1" />
     <!-- Test project -->
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
