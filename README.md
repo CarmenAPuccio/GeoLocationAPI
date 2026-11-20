@@ -121,12 +121,17 @@ kubectl exec -it busybox -n default -- wget -qO- http://{Service-IP}:{Port}/api/
 
 ## Tests
 ```sh
-dotnet test GeoLocationAPI.Tests
+dotnet test GeoLocationAPI.sln      # everything
+./scripts/coverage.sh               # everything, and fails unless line and branch coverage are 100%
 ```
-The tests are xUnit integration tests. They start the whole API in memory with `WebApplicationFactory` (no ports, containers or network needed), call it over HTTP, and use the real GeoLite2 database. They cover:
-- successful lookups, IPv6, and valid addresses that are not in the database
-- invalid addresses and unknown routes returning RFC 9457 problem details, and a unit test of the IP address parser
-- the health check, API version headers, the OpenAPI document and the Scalar page
+**API tests** (`GeoLocationAPI.Tests`) are xUnit integration tests. They start the whole API in memory with `WebApplicationFactory` (no ports, containers or network needed), call it over HTTP, and use the real GeoLite2 database. They cover:
+- successful lookups, IPv6, the caller's own address (including IPv4-mapped IPv6) and valid addresses that are not in the database
+- `X-Forwarded-For` honored from the load balancer network and ignored from anywhere else
+- invalid addresses and unknown routes returning RFC 9457 problem details, and the IP parser on its own
+- the health check (healthy, address missing, lookup failing), API version headers, the OpenAPI document and the Scalar page, which is absent in Production
+- the app refusing to start with a missing or invalid setting
 - the custom telemetry: the span and the `geolocation.lookups` counter
 
-Container and CDK changes are checked by running `finch compose up` and `cdk synth` (see the [CDK README](CdkGeoLocationApi/README.md)).
+**CDK tests** (`CdkGeoLocationApi/test/CdkGeoLocationApi.Tests`) synthesize the stack and assert on the CloudFormation it produces: task size and ARM64, the containers, the least-privilege task role, log groups, the service and load balancer, the Docker image build contexts, and the WAF rules. The VPC CIDR is checked against the API's trusted proxy network, and the collector log group names against the collector config.
+
+Coverage excludes generated code (for example the OpenAPI XML comment support). Container changes are checked by running `finch compose up`, and the CDK entry point by running `cdk synth`. Neither a container run nor a deploy is part of the automated tests.

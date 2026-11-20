@@ -13,6 +13,7 @@ This C# [AWS CDK](https://aws.amazon.com/cdk/) app deploys the GeoLocationAPI to
 Run these from this directory (`CdkGeoLocationApi`). The app builds the images from the repository root, one level up.
 
 * `dotnet build src` compile this app
+* `dotnet test test/CdkGeoLocationApi.Tests` assert on the synthesized stack
 * `cdk synth`        emit the synthesized CloudFormation template (needs no AWS credentials)
 * `cdk diff`         compare the deployed stack with the current state
 * `CDK_DOCKER=finch cdk deploy`   build the images with Finch and deploy

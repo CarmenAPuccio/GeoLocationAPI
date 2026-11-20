@@ -15,7 +15,11 @@ namespace CdkGeoLocationApi
     {
         private const int ApiPort = 5254;
 
-        internal CdkGeoLocationApiStack(Construct scope, string id, IStackProps? props = null) : base(scope, id, props)
+        /// <param name="repositoryRoot">
+        /// The Docker build context for the API image. Defaults to the parent of the working directory, because
+        /// <c>cdk</c> runs from the CdkGeoLocationApi directory.
+        /// </param>
+        internal CdkGeoLocationApiStack(Construct scope, string id, IStackProps? props = null, string? repositoryRoot = null) : base(scope, id, props)
         {
             // Create the VPC
             // NOTE: Make sure the CIDR is the same as ProxyInformation in the GeoLocationAPI appsettings.Production.json
@@ -120,8 +124,8 @@ namespace CdkGeoLocationApi
 
             // The Docker build context is the repository root, because Directory.Build.props,
             // Directory.Packages.props and global.json live there. The .dockerignore at the root keeps
-            // everything else out. cdk runs from the CdkGeoLocationApi directory.
-            string repositoryRoot = Path.GetFullPath("..");
+            // everything else out.
+            repositoryRoot ??= Path.GetFullPath("..");
 
             // Build the AWS OTEL Collector Container
             DockerImageAsset awsOTELCollectorAsset = new DockerImageAsset(this, "AWSOTELCollectorAsset", new DockerImageAssetProps

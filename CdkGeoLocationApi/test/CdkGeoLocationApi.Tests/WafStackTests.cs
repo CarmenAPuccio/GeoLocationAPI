@@ -1,0 +1,108 @@
+using System.Text.RegularExpressions;
+
+namespace CdkGeoLocationApi.Tests;
+
+[Collection(nameof(StackCollectionDefinition))]
+public sealed class WafStackTests
+{
+    private readonly StackFixture _stack;
+
+    public WafStackTests(StackFixture stack) => _stack = stack;
+
+    private System.Text.Json.JsonElement WebAcl => Assert.Single(StackFixture.ResourcesIn(_stack.Waf, "AWS::WAFv2::WebACL"));
+
+    [Fact]
+    public void WebAcl_BlocksByDefault_AndIsRegional()
+    {
+        Assert.Equal("REGIONAL", WebAcl.GetProperty("Scope").GetString());
+        Assert.True(WebAcl.GetProperty("DefaultAction").TryGetProperty("Block", out _));
+    }
+
+    [Fact]
+    public void WebAcl_AppliesTheAwsManagedRuleGroupsInOrder()
+    {
+        var rules = WebAcl.GetProperty("Rules").EnumerateArray().OrderBy(r => r.GetProperty("Priority").GetInt32()).ToList();
+
+        var managed = rules.Where(r => r.GetProperty("Statement").TryGetProperty("ManagedRuleGroupStatement", out _)).ToList();
+        Assert.Equal(
+            new[]
+            {
+                "AWSManagedRulesCommonRuleSet",
+                "AWSManagedRulesKnownBadInputsRuleSet",
+                "AWSManagedRulesLinuxRuleSet",
+                "AWSManagedRulesUnixRuleSet",
+                "AWSManagedRulesAmazonIpReputationList",
+                "AWSManagedRulesAnonymousIpList",
+            },
+            managed.Select(r => r.GetProperty("Statement").GetProperty("ManagedRuleGroupStatement").GetProperty("Name").GetString()));
+        Assert.All(managed, r =>
+        {
+            Assert.Equal("AWS", r.GetProperty("Statement").GetProperty("ManagedRuleGroupStatement").GetProperty("VendorName").GetString());
+            Assert.True(r.GetProperty("OverrideAction").TryGetProperty("None", out _));
+        });
+
+        // Every rule, including the final allow rule, runs after the managed groups.
+        Assert.Equal("GeoLocationAPI-Regex-Rule", rules[^1].GetProperty("Name").GetString());
+        Assert.Equal(managed.Count, rules[^1].GetProperty("Priority").GetInt32());
+    }
+
+    [Fact]
+    public void WebAcl_AllowsOnlyTheApiAndHealthCheckPaths()
+    {
+        var allow = WebAcl.GetProperty("Rules").EnumerateArray().Single(r => r.GetProperty("Name").GetString() == "GeoLocationAPI-Regex-Rule");
+        Assert.True(allow.GetProperty("Action").TryGetProperty("Allow", out _));
+
+        var patterns = allow.GetProperty("Statement").GetProperty("OrStatement").GetProperty("Statements").EnumerateArray()
+            .Select(s => new Regex(s.GetProperty("RegexMatchStatement").GetProperty("RegexString").GetString()!, RegexOptions.None))
+            .ToList();
+        Assert.Equal(2, patterns.Count);
+
+        bool Allowed(string path) => patterns.Any(p => p.IsMatch(path));
+
+        Assert.True(Allowed("/hc"));
+        Assert.True(Allowed("/HC"));
+        Assert.True(Allowed("/api/v1/geolocation"));
+        Assert.True(Allowed("/api/v1/geolocation/8.8.8.8"));
+        Assert.True(Allowed("/api/V2/GeoLocation/8.8.8.8"));
+        Assert.False(Allowed("/"));
+        Assert.False(Allowed("/admin"));
+        Assert.False(Allowed("/scalar/v1"));
+        Assert.False(Allowed("/api/v1/other"));
+    }
+
+    [Fact]
+    public void WebAcl_RulesEmitMetricsAndSampleRequests()
+    {
+        Assert.True(WebAcl.GetProperty("VisibilityConfig").GetProperty("CloudWatchMetricsEnabled").GetBoolean());
+        Assert.All(WebAcl.GetProperty("Rules").EnumerateArray(), r =>
+        {
+            Assert.True(r.GetProperty("VisibilityConfig").GetProperty("CloudWatchMetricsEnabled").GetBoolean());
+            Assert.True(r.GetProperty("VisibilityConfig").GetProperty("SampledRequestsEnabled").GetBoolean());
+        });
+    }
+
+    [Fact]
+    public void WebAcl_LogsToACloudWatchGroupWithTheRequiredPrefix()
+    {
+        var logGroup = Assert.Single(StackFixture.ResourcesIn(_stack.Waf, "AWS::Logs::LogGroup"));
+        Assert.StartsWith("aws-waf-logs-", logGroup.GetProperty("LogGroupName").GetString(), StringComparison.Ordinal);
+        Assert.Equal(180, logGroup.GetProperty("RetentionInDays").GetInt32());
+
+        var logging = Assert.Single(StackFixture.ResourcesIn(_stack.Waf, "AWS::WAFv2::LoggingConfiguration"));
+        var destination = Assert.Single(logging.GetProperty("LogDestinationConfigs").EnumerateArray()).ToString();
+        Assert.Contains(":log-group:", destination, StringComparison.Ordinal);
+        // The ARN is built from the log group name. WAF rejects a log group ARN that ends in ":*",
+        // which is what the log group's own ARN attribute returns.
+        Assert.DoesNotContain("Fn::GetAtt", destination, StringComparison.Ordinal);
+        Assert.DoesNotContain(":*", destination, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WebAcl_IsAssociatedWithTheLoadBalancer()
+    {
+        var association = Assert.Single(StackFixture.ResourcesIn(_stack.Waf, "AWS::WAFv2::WebACLAssociation"));
+
+        Assert.True(association.TryGetProperty("ResourceArn", out _));
+        Assert.True(association.TryGetProperty("WebACLArn", out _));
+    }
+}

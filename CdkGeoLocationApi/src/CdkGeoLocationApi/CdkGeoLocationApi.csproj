@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="CdkGeoLocationApi.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Amazon.CDK.Lib" />
     <PackageReference Include="Constructs" />
     <!-- Compile-time checks for missing required construct properties. -->
