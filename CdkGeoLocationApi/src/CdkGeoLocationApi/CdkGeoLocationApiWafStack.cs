@@ -13,6 +13,11 @@ namespace CdkGeoLocationApi
     }
     sealed class CdkGeoLocationApiWafStack : NestedStack
     {
+        // Requests allowed per client IP in each evaluation window. Over that, the IP gets a 429 until its rate drops.
+        // WAF evaluates the rate periodically, so an IP can briefly exceed the limit before it is blocked.
+        private const int RateLimit = 300;
+        private const int RateLimitWindowSeconds = 300;
+
         public CdkGeoLocationApiWafStack(Construct scope, string id, ResourceNestedStackProps props) : base(scope, id, props)
         {
             // Create the WAFv2 WebACL
@@ -179,8 +184,36 @@ namespace CdkGeoLocationApi
 
                     new RuleProperty
                     {
-                        Name = "GeoLocationAPI-Regex-Rule",
+                        // Evaluated before the allow rule, because Allow ends evaluation.
+                        Name = "GeoLocationAPI-RateLimit",
                         Priority = 6,
+                        Action = new RuleActionProperty
+                        {
+                            Block = new BlockActionProperty
+                            {
+                                CustomResponse = new CustomResponseProperty { ResponseCode = 429 }
+                            }
+                        },
+                        Statement = new StatementProperty
+                        {
+                            RateBasedStatement = new RateBasedStatementProperty
+                            {
+                                Limit = RateLimit,
+                                EvaluationWindowSec = RateLimitWindowSeconds,
+                                AggregateKeyType = "IP"
+                            }
+                        },
+                        VisibilityConfig = new VisibilityConfigProperty
+                        {
+                            CloudWatchMetricsEnabled = true,
+                            MetricName = "GeoLocationAPI-RateLimit",
+                            SampledRequestsEnabled = true
+                        },
+                    },
+                    new RuleProperty
+                    {
+                        Name = "GeoLocationAPI-Regex-Rule",
+                        Priority = 7,
                         Action = new RuleActionProperty
                         {
                             Allow = new AllowActionProperty()

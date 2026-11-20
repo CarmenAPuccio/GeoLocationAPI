@@ -41,9 +41,27 @@ public sealed class WafStackTests
             Assert.True(r.GetProperty("OverrideAction").TryGetProperty("None", out _));
         });
 
-        // Every rule, including the final allow rule, runs after the managed groups.
-        Assert.Equal("GeoLocationAPI-Regex-Rule", rules[^1].GetProperty("Name").GetString());
-        Assert.Equal(managed.Count, rules[^1].GetProperty("Priority").GetInt32());
+        // After the managed groups: the rate limit, then the allow rule. Allow ends evaluation, so it must be last.
+        Assert.Equal(
+            new[] { "GeoLocationAPI-RateLimit", "GeoLocationAPI-Regex-Rule" },
+            rules.Skip(managed.Count).Select(r => r.GetProperty("Name").GetString()));
+        Assert.Equal(
+            Enumerable.Range(0, rules.Count),
+            rules.Select(r => r.GetProperty("Priority").GetInt32()));
+    }
+
+    [Fact]
+    public void WebAcl_LimitsEachIpTo300RequestsPer300Seconds_AndAnswers429()
+    {
+        var rule = WebAcl.GetProperty("Rules").EnumerateArray().Single(r => r.GetProperty("Name").GetString() == "GeoLocationAPI-RateLimit");
+
+        var rate = rule.GetProperty("Statement").GetProperty("RateBasedStatement");
+        Assert.Equal(300, rate.GetProperty("Limit").GetInt32());
+        Assert.Equal(300, rate.GetProperty("EvaluationWindowSec").GetInt32());
+        Assert.Equal("IP", rate.GetProperty("AggregateKeyType").GetString());
+
+        Assert.Equal(429, rule.GetProperty("Action").GetProperty("Block").GetProperty("CustomResponse").GetProperty("ResponseCode").GetInt32());
+        Assert.False(rule.TryGetProperty("OverrideAction", out _));
     }
 
     [Fact]
