@@ -31,6 +31,7 @@
 - Run `dotnet build` and `dotnet test` after every change, and add tests with each behavior change. Line and branch coverage must stay at 100% for both test projects (`./scripts/coverage.sh`). Prefer writing the test over excluding code. `[ExcludeFromCodeCoverage]` needs a justification, as on the CDK `Main`.
 - xUnit is v2 (no `TestContext.Current`). Tests that use process-wide state (telemetry listeners, the jsii runtime behind the CDK) run in serialized collections.
 - Verify behavior by running it, not just by building. For container changes, run `finch compose up`. For CDK changes, run `cdk synth` and inspect the output.
+- Metrics are an allowlist in `TelemetryViews.cs`. A new metric must be added there on purpose. Health checks are neither traced nor counted as lookups. Count business metrics in the controller, not the service.
 - Telemetry uses the standard `OTEL_*` environment variables. Do not add custom endpoint or service-name settings. The custom metric and span source are both named `GeoLocationAPI`.
 - Errors are RFC 9457 problem details (`application/problem+json`). A valid IP missing from the database is a 200 with `ipFoundInGeoDB: false`, not an error.
 - `GeoLocationAPI/GeoLite2-City.mmdb` must stay in the repository. The app needs it.

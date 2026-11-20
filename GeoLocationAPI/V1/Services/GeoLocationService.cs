@@ -57,7 +57,6 @@ namespace GeoLocationAPI.V1.Services
             }
 
             activity?.SetTag("geolocation.found", response.IPFoundInGeoDB);
-            _instrumentation.LookupCounter.Add(1, new KeyValuePair<string, object?>("geolocation.found", response.IPFoundInGeoDB));
             activity?.SetStatus(ActivityStatusCode.Ok);
             return response;
         }

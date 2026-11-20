@@ -78,20 +78,28 @@ var openTelemetry = builder.Services.AddOpenTelemetry()
         autoGenerateServiceInstanceId: false))
     .WithTracing(tracing => tracing
         .AddXRayTraceId()
-        .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation()
+        // The ALB and ECS call the health check every few seconds. Tracing every call buries the real traces
+        // (99% of them in the first deployment). Failures still show up in logs and in the request metrics.
+        .AddAspNetCoreInstrumentation(options =>
+            options.Filter = context => !context.Request.Path.StartsWithSegments(TelemetryViews.HealthCheckPath))
         .AddSource(Instrumentation.ActivitySourceName))
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation()
         .AddRuntimeInstrumentation()
-        .AddMeter(Instrumentation.ActivitySourceName))
+        .AddMeter(Instrumentation.ActivitySourceName)
+        .AddView(TelemetryViews.Configure))
     .WithLogging()
     .UseOtlpExporter();
 
 if (builder.Environment.IsDevelopment())
 {
     openTelemetry.WithTracing(tracing => tracing.AddConsoleExporter());
+}
+else
+{
+    // Logs reach CloudWatch through OTLP, so the console would store every line a second time. Warnings and
+    // errors stay on the console as a fallback for when the collector sidecar is unavailable.
+    builder.Logging.AddFilter<Microsoft.Extensions.Logging.Console.ConsoleLoggerProvider>(null, LogLevel.Warning);
 }
 
 Sdk.SetDefaultTextMapPropagator(new AWSXRayPropagator());

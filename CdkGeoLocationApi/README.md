@@ -37,7 +37,7 @@ Run `cdk diff` first and read it. For a stack created before the .NET 10 update,
 
 After the deploy, check that telemetry arrives (use the stack's load balancer URL to send a few requests first):
 
-- **Traces:** the X-Ray console, or `aws xray get-trace-summaries --start-time <t> --end-time <t>`. The service name is `GeoLocationAPI`.
-- **Metrics:** the `ECS/AWSOTel/Application` namespace in CloudWatch. The log group `/geolocationapi/otel/metrics` should have EMF entries.
+- **Traces:** the X-Ray console, or `aws xray get-trace-summaries --start-time <t> --end-time <t>`. The service name is `GeoLocationAPI`. Health checks are not traced. Filter by outcome with `annotation.geolocation_found = true` (or `false`).
+- **Metrics:** the `ECS/AWSOTel/Application` namespace in CloudWatch. The log group `/geolocationapi/otel/metrics` should have EMF entries. Expect `http.server.request.duration`, `http.server.active_requests`, `geolocation.lookups` and a handful of `dotnet.*` metrics, and nothing else. A failing health check appears as `http.server.request.duration` with `http.route=/hc` and a 503 status; the ALB `UnHealthyHostCount` metric and the ECS service events show the same failure from the load balancer's side.
 - **Logs:** `/geolocationapi/otel/logs` for the app's OTLP logs, and the stack's API log group for the container output.
 - **Collector problems:** the collector container writes its own errors to the stack's API log group under the `aws-otel-sidecar-collector` stream prefix. Access-denied errors there mean the task role is missing a permission.

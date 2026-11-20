@@ -16,10 +16,12 @@ namespace GeoLocationAPI.V1.Controllers
     public class GeoLocationController : ControllerBase
     {
         private readonly IGeoLocationService _geoLocationService;
+        private readonly Instrumentation _instrumentation;
 
-        public GeoLocationController(IGeoLocationService geoLocationService)
+        public GeoLocationController(IGeoLocationService geoLocationService, Instrumentation instrumentation)
         {
             _geoLocationService = geoLocationService;
+            _instrumentation = instrumentation;
         }
 
         /// <summary>
@@ -40,7 +42,7 @@ namespace GeoLocationAPI.V1.Controllers
             }
 
             // Dual-stack listeners report IPv4 callers as ::ffff:a.b.c.d.
-            return _geoLocationService.GetGeoLocation(remoteIp.IsIPv4MappedToIPv6 ? remoteIp.MapToIPv4() : remoteIp);
+            return Lookup(remoteIp.IsIPv4MappedToIPv6 ? remoteIp.MapToIPv4() : remoteIp);
         }
 
         /// <summary>
@@ -59,7 +61,15 @@ namespace GeoLocationAPI.V1.Controllers
                 return InvalidIp($"'{ipAddress}' is not a valid IPv4 or IPv6 address.", ipAddress);
             }
 
-            return _geoLocationService.GetGeoLocation(parsed!);
+            return Lookup(parsed!);
+        }
+
+        // Counted here, not in the service, so the health check's own lookups are not counted as API traffic.
+        private GeoLocation Lookup(IPAddress address)
+        {
+            var location = _geoLocationService.GetGeoLocation(address);
+            _instrumentation.LookupCounter.Add(1, new KeyValuePair<string, object?>("geolocation.found", location.IPFoundInGeoDB));
+            return location;
         }
 
         private ObjectResult InvalidIp(string detail, string? ipAddress)
