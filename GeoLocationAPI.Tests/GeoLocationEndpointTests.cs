@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using GeoLocationAPI.V1.Models;
 
 namespace GeoLocationAPI.Tests;
@@ -49,5 +50,51 @@ public class GeoLocationEndpointTests : IClassFixture<GeoLocationApiFactory>
         var response = await _client.GetAsync("/swagger/v1/swagger.json");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Ipv6_IsAccepted()
+    {
+        var response = await _client.GetAsync("/api/v1/geolocation/2001:4860:4860::8888");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("abc")]
+    [InlineData("999.1.1.1")]
+    [InlineData("1.2.3")]
+    public async Task InvalidIp_ReturnsProblemDetails(string value)
+    {
+        var response = await _client.GetAsync($"/api/v1/geolocation/{value}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = body.RootElement;
+        Assert.Equal(400, root.GetProperty("status").GetInt32());
+        Assert.Equal("Invalid IP address", root.GetProperty("title").GetString());
+        Assert.Equal(value, root.GetProperty("ipAddress").GetString());
+        Assert.True(root.TryGetProperty("traceId", out _));
+    }
+
+    [Fact]
+    public async Task UnknownRoute_ReturnsProblemDetails()
+    {
+        var response = await _client.GetAsync("/api/v1/nothing-here");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task HealthCheck_ReportsHealthy()
+    {
+        var response = await _client.GetAsync("/hc");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Healthy", body.RootElement.GetProperty("Status").GetString());
     }
 }

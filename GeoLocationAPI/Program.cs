@@ -1,3 +1,4 @@
+using GeoLocationAPI.Configuration;
 using GeoLocationAPI.Swagger;
 using GeoLocationAPI.V1.HealthChecks;
 using GeoLocationAPI.V1.Services;
@@ -67,7 +68,7 @@ builder.Services.AddSwaggerGen(
 Sdk.CreateTracerProviderBuilder()
     .SetResourceBuilder(
         ResourceBuilder.CreateDefault().AddService(
-            builder.Configuration.GetValue<string>("ServiceName"),
+            Required("ServiceName"),
             serviceNamespace: "GeoLocation",
             autoGenerateServiceInstanceId: false)
         .AddTelemetrySdk())
@@ -78,7 +79,7 @@ Sdk.CreateTracerProviderBuilder()
     .AddHttpClientInstrumentation()
     .AddOtlpExporter(otlpOptions =>
     {
-        otlpOptions.Endpoint = new Uri(builder.Configuration.GetValue<string>("OTEL_OTLP_ENDPOINT"));
+        otlpOptions.Endpoint = new Uri(Required("OTEL_OTLP_ENDPOINT"));
     })
     .AddConsoleExporter()
     .Build();
@@ -86,34 +87,55 @@ Sdk.CreateTracerProviderBuilder()
 
 Sdk.SetDefaultTextMapPropagator(new AWSXRayPropagator());
 
+builder.Services.AddProblemDetails();
+
+builder.Services.AddOptions<DbSettings>()
+    .BindConfiguration(DbSettings.SectionName)
+    .ValidateDataAnnotations()
+    .Validate(o => File.Exists(o.ResolvedPath), "DBSettings:GeoLite2CityDB does not point to an existing file.")
+    .ValidateOnStart();
+
+builder.Services.AddOptions<ProxyInformation>()
+    .BindConfiguration(ProxyInformation.SectionName)
+    .ValidateDataAnnotations()
+    .Validate(o => IPAddress.TryParse(o.ProxyKnownNetwork, out _), "ProxyInformation:ProxyKnownNetwork is not a valid IP address.")
+    .ValidateOnStart();
+
 builder.Services.AddSingleton<IGeoLocationService, GeoLocationService>();
+
+// The key name keeps its historical spelling because deployed environments already set it.
+var healthCheckIp = Required("HealtcheckIPToTest");
+if (!IPAddress.TryParse(healthCheckIp, out _))
+{
+    throw new InvalidOperationException("HealtcheckIPToTest is not a valid IP address.");
+}
+
 builder.Services.AddHealthChecks()
     .AddTypeActivatedCheck<GeoLocationHealthCheck>(
         "GeoLocationHealthCheck",
-        args: new object[] {
-            builder.Configuration.GetValue<string>("HealtcheckBaseURL"),
-            builder.Configuration.GetValue<string>("HealtcheckIPToTest")
-            }
-        );
+        args: new object[] { healthCheckIp });
 
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders =
-    ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse(builder.Configuration["ProxyInformation:ProxyKnownNetwork"]), Int32.Parse(builder.Configuration["ProxyInformation:ProxyKnownNetworkCIDR"])));
-    options.ForwardLimit = null;
-
-});
+builder.Services.AddOptions<ForwardedHeadersOptions>()
+    .Configure<IOptions<ProxyInformation>>((options, proxy) =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.KnownIPNetworks.Add(new System.Net.IPNetwork(
+            IPAddress.Parse(proxy.Value.ProxyKnownNetwork),
+            proxy.Value.ProxyKnownNetworkCIDR));
+        options.ForwardLimit = null;
+    });
 
 var app = builder.Build();
 
 var apiVersionDescriptionProvider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
 
 // Configure the HTTP request pipeline.
+// Unhandled exceptions and empty 4xx/5xx responses are returned as RFC 9457 problem details.
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+
 if (app.Environment.IsDevelopment())
 {
-    app.UseDeveloperExceptionPage();
-
     app.UseSwagger();
 
     app.UseSwaggerUI(
@@ -139,6 +161,9 @@ app.MapHealthChecks("/hc", new HealthCheckOptions
 });
 
 app.Run();
+
+string Required(string key) =>
+    builder.Configuration[key] ?? throw new InvalidOperationException($"Required configuration value '{key}' is missing.");
 
 Task WriteResponse(HttpContext context, HealthReport healthReport)
 {

@@ -1,54 +1,42 @@
-﻿using GeoLocationAPI.V1.Models;
+using GeoLocationAPI.V1.Services;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Net;
 
 namespace GeoLocationAPI.V1.HealthChecks
 {
-    public class GeoLocationHealthCheck : IHealthCheck
+    /// <summary>
+    /// Looks up a known IP address in the database to prove the service and data file are usable.
+    /// </summary>
+    public sealed class GeoLocationHealthCheck : IHealthCheck
     {
+        private readonly IGeoLocationService _geoLocationService;
+        private readonly IPAddress _ipToTest;
 
-        private readonly string _healthcheckBaseURL;
-        private readonly string _healtcheckIPToTest;
-
-        public GeoLocationHealthCheck(
-
-            string healthcheckBaseURL,
-            string healtcheckIPToTest)
+        public GeoLocationHealthCheck(IGeoLocationService geoLocationService, string ipToTest)
         {
-
-            _healthcheckBaseURL = healthcheckBaseURL;
-            _healtcheckIPToTest = healtcheckIPToTest;
+            _geoLocationService = geoLocationService;
+            _ipToTest = IPAddress.Parse(ipToTest);
         }
 
-        public async Task<HealthCheckResult> CheckHealthAsync(
-         HealthCheckContext context,
-         CancellationToken cancellationToken = default(CancellationToken))
+        public Task<HealthCheckResult> CheckHealthAsync(
+            HealthCheckContext context,
+            CancellationToken cancellationToken = default)
         {
-            // No validation done on the url below.
-            // Ensure that the HealtcheckBaseURL value from appsettings.json has a trailing slash.
-            // ex: "HealtcheckBaseURL": "http://localhost:5254/api/v1/geolocation/"
-            string url = _healthcheckBaseURL + _healtcheckIPToTest;
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.TryAddWithoutValidation("From", "GeoLocationHealthCheck@example.com");
-            var client = new HttpClient();
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-
             try
             {
-                var json = await response.Content.ReadFromJsonAsync<GeoLocation>();
-                if (response.IsSuccessStatusCode && json?.Message == _healtcheckIPToTest + " found in the GeoDB")
-                {
-                    return HealthCheckResult.Healthy("The healthcheck is healthy - " + json?.Message);
+                var result = _geoLocationService.GetGeoLocation(_ipToTest);
 
-                }
-                return
-                    new HealthCheckResult(
-                        context.Registration.FailureStatus, "The healthcheck indicates an unhealthy result." + json?.Message);
+                return Task.FromResult(result.IPFoundInGeoDB
+                    ? HealthCheckResult.Healthy("The healthcheck is healthy - " + result.Message)
+                    : new HealthCheckResult(context.Registration.FailureStatus,
+                        "The healthcheck indicates an unhealthy result. " + result.Message));
             }
             catch (Exception ex)
             {
-                return
-                    new HealthCheckResult(
-                        context.Registration.FailureStatus, "The healthcheck indicates an unhealthy result." + ex.ToString());
+                return Task.FromResult(new HealthCheckResult(
+                    context.Registration.FailureStatus,
+                    "The healthcheck indicates an unhealthy result.",
+                    ex));
             }
         }
     }

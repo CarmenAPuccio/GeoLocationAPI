@@ -7,7 +7,7 @@ namespace GeoLocationAPI.V1.Helpers;
 /// ActivitySource and Instruments. This avoids possible type collisions
 /// with other components in the DI container.
 /// </summary>
-public class Instrumentation : IDisposable
+public sealed class Instrumentation : IDisposable
 {
     internal const string ActivitySourceName = "GeoLocationAPI";
     public Instrumentation()
