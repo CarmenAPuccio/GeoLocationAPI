@@ -62,7 +62,7 @@ Sample Payload:
 	"ipAddress": "not-an-ip"
 }
 ```
-You can check the healthcheck by issuing something like this. Note that it will return *ProcessArchitecture* which is useful to see if the workload is running on Arm64 or X64. The HealtcheckIPToTest (in this case 8.8.8.8) is set in the appsettings.json files:
+You can check the healthcheck by issuing something like this. Note that it will return *ProcessArchitecture* which is useful to see if the workload is running on Arm64 or X64. The health check looks up the address in `HealthCheck:IpToTest` (in this case 8.8.8.8), which is set in the appsettings files:
 
 ```sh
 curl -X GET "http://localhost:5254/hc" -v
@@ -84,6 +84,17 @@ Sample Payload:
 	}
 }
 ```
+## Configuration
+Settings come from the `appsettings*.json` files and can be overridden with environment variables (a double underscore replaces the colon, for example `HealthCheck__IpToTest`). The app checks them at startup and fails with a clear message if one is missing or invalid.
+
+| Setting | Purpose |
+| --- | --- |
+| `DBSettings:GeoLite2CityDB` | Path to the GeoLite2 City database. A relative path is resolved against the application directory. |
+| `ProxyInformation:ProxyKnownNetwork` and `ProxyKnownNetworkCIDR` | The load balancer network whose `X-Forwarded-For` header is trusted. Must match the VPC CIDR in the CDK app. |
+| `HealthCheck:IpToTest` | The address the `/hc` health check looks up. |
+
+Telemetry (traces, metrics and logs over OTLP) uses the standard OpenTelemetry environment variables, for example `OTEL_EXPORTER_OTLP_ENDPOINT` (default `http://localhost:4317`) and `OTEL_SERVICE_NAME` (default `GeoLocationAPI`). In the Development environment, traces are also printed to the console.
+
 ## Running on ECS Fargate
 
 The [AWS CDK](https://aws.amazon.com/cdk/) is used to deploy the application to [ECS Fargate](https://aws.amazon.com/fargate/) and is protected with [AWS WAF](https://aws.amazon.com/waf/) via the CDK for C#. Follow the instructions in the [README.md](CdkGeoLocationApi/README.md).
@@ -112,3 +123,10 @@ kubectl exec -it busybox -n default -- wget -qO- http://{Service-IP}:{Port}/api/
 ```sh
 dotnet test GeoLocationAPI.Tests
 ```
+The tests are xUnit integration tests. They start the whole API in memory with `WebApplicationFactory` (no ports, containers or network needed), call it over HTTP, and use the real GeoLite2 database. They cover:
+- successful lookups, IPv6, and valid addresses that are not in the database
+- invalid addresses and unknown routes returning RFC 9457 problem details, and a unit test of the IP address parser
+- the health check, API version headers, the OpenAPI document and the Scalar page
+- the custom telemetry: the span and the `geolocation.lookups` counter
+
+Container and CDK changes are checked by running `finch compose up` and `cdk synth` (see the [CDK README](CdkGeoLocationApi/README.md)).
