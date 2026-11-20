@@ -186,3 +186,6 @@ Task WriteResponse(HttpContext context, HealthReport healthReport)
 }
 
 
+
+// Makes the entry point visible to WebApplicationFactory in the test project.
+public partial class Program { }
