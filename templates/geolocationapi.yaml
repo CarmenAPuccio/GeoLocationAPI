@@ -1,3 +1,6 @@
+# Images are not published for this project. Build and push them to your own registry, then substitute
+# REGISTRY and TAG when applying (see "Running on Kubernetes" in the README):
+#   envsubst < templates/geolocationapi.yaml | kubectl apply -f -
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -42,9 +45,10 @@ spec:
         app: geolocationapi
     spec: 
       containers: 
-        - image: "carmenpuccio/aws-otel-collector:latest"
-          name: aws-otel-collector           
-        - image: "carmenpuccio/geolocationapi:latest"
+        - image: "${REGISTRY}/aws-otel-collector:${TAG}"
+          name: aws-otel-collector
+          args: ["--config=/etc/ecs/ecs-resource-detection.yaml"]
+        - image: "${REGISTRY}/geolocationapi:${TAG}"
           name: geolocationapi
           env: 
             - name: ASPNETCORE_ENVIRONMENT

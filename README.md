@@ -89,13 +89,19 @@ Sample Payload:
 The [AWS CDK](https://aws.amazon.com/cdk/) is used to deploy the application to [ECS Fargate](https://aws.amazon.com/fargate/) and is protected with [AWS WAF](https://aws.amazon.com/waf/) via the CDK for C#. Follow the instructions in the [README.md](CdkGeoLocationApi/README.md).
 
 ## Running on Kubernetes
-
-To deploy to an existing Kubernetes cluster:
-
+No images are published for this project, so build and push your own. The collector image uses the ECS configuration, which exports to AWS, so the pod needs AWS credentials (for example through IAM roles for service accounts) or you can swap in `local.yaml`.
 ```sh
-kubectl apply -f templates/
+export REGISTRY=<account>.dkr.ecr.<region>.amazonaws.com   # or any registry your cluster can pull from
+export TAG=latest
+finch build --platform linux/arm64 -f GeoLocationAPI/Dockerfile -t $REGISTRY/geolocationapi:$TAG .
+finch build --platform linux/arm64 -t $REGISTRY/aws-otel-collector:$TAG aws-otel-collector
+finch push $REGISTRY/geolocationapi:$TAG
+finch push $REGISTRY/aws-otel-collector:$TAG
 ```
-
+Use `linux/amd64` instead if the cluster nodes are x86. To deploy to an existing Kubernetes cluster:
+```sh
+envsubst < templates/geolocationapi.yaml | kubectl apply -f -
+```
 The [geolocationapi.yaml](/templates/geolocationapi.yaml) manifest doesn't expose the service via a load balancer so in order to test do something like this:
 
 ```sh
