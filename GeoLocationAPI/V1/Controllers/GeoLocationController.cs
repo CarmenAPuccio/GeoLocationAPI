@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using GeoLocationAPI.V1.Helpers;
 using GeoLocationAPI.V1.Models;
 using GeoLocationAPI.V1.Services;

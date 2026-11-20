@@ -4,7 +4,7 @@
 ## Prerequisites
 To get started you will need:
 - [Docker](https://docs.docker.com/install/) installed on your local machine.
-- [.NET](https://dotnet.microsoft.com/)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (LTS). `global.json` pins the SDK major version.
 - An IDE for building .NET applications such as [Visual Studio](https://visualstudio.microsoft.com/)
 ## Running Locally
 
@@ -13,8 +13,10 @@ To get started, simply run the application in an IDE such as Visual Studio or is
 dotnet run --project GeoLocationAPI/GeoLocationAPI.csproj
 ```
 Sample URL's:
-- Swagger Definition: 
-  - http://localhost:5254/swagger/index.html
+- API reference (Scalar, Development only):
+  - http://localhost:5254/scalar/v1
+- OpenAPI definition (Development only):
+  - http://localhost:5254/openapi/v1.json
 - IPAddress of your machine:
   - http://localhost:5254/api/v1/geolocation/
 - Look up an IPAddress:
@@ -45,6 +47,21 @@ Sample Payload:
 	"message": "71.168.176.139 found in the GeoDB"
 }
 ```
+An address that is not a valid IPv4 or IPv6 address returns HTTP 400 with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details body. A valid address that is not in the database (for example a private address) returns 200 with `ipFoundInGeoDB` set to `false`.
+```sh
+curl -X GET "http://localhost:5254/api/v1/GeoLocation/not-an-ip" -v
+```
+Sample Payload:
+```
+{
+	"type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+	"title": "Invalid IP address",
+	"status": 400,
+	"detail": "'not-an-ip' is not a valid IPv4 or IPv6 address.",
+	"traceId": "00-98811f84a13aa0997da03855facb27d4-b2cbae14a509d6d2-03",
+	"ipAddress": "not-an-ip"
+}
+```
 You can check the healthcheck by issuing something like this. Note that it will return *ProcessArchitecture* which is useful to see if the workload is running on Arm64 or X64. The HealtcheckIPToTest (in this case 8.8.8.8) is set in the appsettings.json files:
 
 ```sh
@@ -56,7 +73,7 @@ Sample Payload:
 {
 	"Status": "Healthy",
 	"Duration": "00:00:00.0084379",
-	"FrameworkDescription": ".NET 6.0.12",
+	"FrameworkDescription": ".NET 10.0.15",
 	"ProcessArchitecture": "Arm64",
 	"Results": {
 		"GeoLocationHealthCheck": {
@@ -84,4 +101,9 @@ The [geolocationapi.yaml](/templates/geolocationapi.yaml) manifest doesn't expos
 
 ```sh
 kubectl exec -it busybox -n default -- wget -qO- http://{Service-IP}:{Port}/api/v1/geolocation/8.8.8.8
+```
+
+## Tests
+```sh
+dotnet test GeoLocationAPI.Tests
 ```

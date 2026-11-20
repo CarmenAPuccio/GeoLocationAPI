@@ -45,9 +45,26 @@ public class GeoLocationEndpointTests : IClassFixture<GeoLocationApiFactory>
     }
 
     [Fact]
-    public async Task OpenApiDocument_IsServedInDevelopment()
+    public async Task OpenApiDocument_DescribesTheVersionedApi()
     {
-        var response = await _client.GetAsync("/swagger/v1/swagger.json");
+        var response = await _client.GetAsync("/openapi/v1.json");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = body.RootElement;
+
+        Assert.Equal("GeoLocationAPI", root.GetProperty("info").GetProperty("title").GetString());
+        Assert.Equal("1.0", root.GetProperty("info").GetProperty("version").GetString());
+
+        var operation = root.GetProperty("paths").GetProperty("/api/v1/GeoLocation/{ipAddress}").GetProperty("get");
+        Assert.True(operation.GetProperty("responses").TryGetProperty("200", out _));
+        Assert.True(operation.GetProperty("responses").GetProperty("400").GetProperty("content").TryGetProperty("application/problem+json", out _));
+    }
+
+    [Fact]
+    public async Task ScalarReference_IsServedInDevelopment()
+    {
+        var response = await _client.GetAsync("/scalar/v1");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }

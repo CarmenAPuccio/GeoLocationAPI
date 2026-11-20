@@ -1,20 +1,19 @@
+using Asp.Versioning;
 using GeoLocationAPI.Configuration;
-using GeoLocationAPI.Swagger;
 using GeoLocationAPI.V1.HealthChecks;
 using GeoLocationAPI.V1.Services;
 using GeoLocationAPI.V1.Helpers;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+using Microsoft.OpenApi;
 using OpenTelemetry;
 using OpenTelemetry.Contrib.Extensions.AWSXRay.Trace;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using Scalar.AspNetCore;
 using System.Net;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -29,41 +28,42 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddApiVersioning(
-
-    options =>
+builder.Services.AddApiVersioning(options =>
     {
-        // reporting api versions will return the headers "api-supported-versions" and "api-deprecated-versions"
+        // Adds the "api-supported-versions" and "api-deprecated-versions" response headers.
         options.ReportApiVersions = true;
 
-    });
-builder.Services.AddVersionedApiExplorer(
-    options =>
+        // Every route carries the version in the URL, for example /api/v1/geolocation.
+        options.ApiVersionReader = new UrlSegmentApiVersionReader();
+    })
+    .AddMvc()
+    .AddApiExplorer(options =>
     {
-        // add the versioned api explorer, which also adds IApiVersionDescriptionProvider service
-        // note: the specified format code will format the version as "'v'major[.minor][-status]"
+        // Formats the version as "'v'major[.minor][-status]", for example "v1". This is also the OpenAPI document name.
         options.GroupNameFormat = "'v'VVV";
 
-        // note: this option is only necessary when versioning by url segment. the SubstitutionFormat
-        // can also be used to control the format of the API version in route templates
+        // Replaces {version:apiVersion} in route templates with the actual version.
         options.SubstituteApiVersionInUrl = true;
-    });
-builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
-builder.Services.AddSingleton<Instrumentation>();
-
-builder.Services.AddSwaggerGen(
-        options =>
+    })
+    // One OpenAPI document per API version. XML doc comments are picked up at build time.
+    .AddOpenApi(options =>
+    {
+        options.Document.AddDocumentTransformer((document, context, cancellationToken) =>
         {
-            // add a custom operation filter which sets default values
-            options.OperationFilter<SwaggerDefaultValues>();
-
-
-            var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-            options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
-
-
+            document.Info = new OpenApiInfo
+            {
+                Title = "GeoLocationAPI",
+                Version = options.Description.ApiVersion.ToString(),
+                Description = ".NET Web API for retrieving geolocations. Geolocation data provided by MaxMind GeoLite2."
+                    + (options.Description.IsDeprecated ? " This API version has been deprecated." : string.Empty),
+                Contact = new OpenApiContact { Name = "Carmen Puccio", Email = "CarmenAPuccio@gmail.com" },
+                License = new OpenApiLicense { Name = "Apache 2.0", Url = new Uri("https://www.apache.org/licenses/LICENSE-2.0") }
+            };
+            return Task.CompletedTask;
         });
+    });
+
+builder.Services.AddSingleton<Instrumentation>();
 
 Sdk.CreateTracerProviderBuilder()
     .SetResourceBuilder(
@@ -127,8 +127,6 @@ builder.Services.AddOptions<ForwardedHeadersOptions>()
 
 var app = builder.Build();
 
-var apiVersionDescriptionProvider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
-
 // Configure the HTTP request pipeline.
 // Unhandled exceptions and empty 4xx/5xx responses are returned as RFC 9457 problem details.
 app.UseExceptionHandler();
@@ -136,17 +134,9 @@ app.UseStatusCodePages();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-
-    app.UseSwaggerUI(
-        options =>
-        {
-            // build a swagger endpoint for each discovered API version
-            foreach (var description in apiVersionDescriptionProvider.ApiVersionDescriptions)
-            {
-                options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
-            }
-        });
+    // OpenAPI document at /openapi/v1.json, interactive reference at /scalar/v1.
+    app.MapOpenApi().WithDocumentPerVersion();
+    app.MapScalarApiReference();
 }
 
 app.UseForwardedHeaders();
