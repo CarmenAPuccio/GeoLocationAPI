@@ -53,10 +53,10 @@ namespace GeoLocationAPI.V1.Services
                     if (reader.TryCity(response.IPAddress, out var trycityResponse))
                     {
                         var cityResponse = reader.City(response.IPAddress);
-                        response.City = cityResponse.City.ToString();
-                        response.TimeZone = cityResponse.Location.TimeZone?.ToString();
-                        response.Continent = cityResponse.Continent.ToString();
-                        response.Country = cityResponse.Country.ToString();
+                        response.City = cityResponse.City.Name;
+                        response.TimeZone = cityResponse.Location.TimeZone;
+                        response.Continent = cityResponse.Continent.Name;
+                        response.Country = cityResponse.Country.Name;
                         response.IPFoundInGeoDB = true;
                         response.Message = response.IPAddress + " found in the GeoDB";
                         activity?.SetTag("message", response.IPAddress + " found in the GeoDB");
