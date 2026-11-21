@@ -13,6 +13,8 @@ public static class TelemetryViews
     // see which endpoint is failing. Scheme and protocol version only multiply the number of metrics.
     private static readonly string[] RequestTags = ["http.request.method", "http.route", "http.response.status_code"];
 
+    private const int RequestCardinalityLimit = 100;
+
     private static readonly HashSet<string> RuntimeMetrics = new(StringComparer.Ordinal)
     {
         "dotnet.gc.collections",
@@ -39,7 +41,8 @@ public static class TelemetryViews
 
         return instrument.Name switch
         {
-            "http.server.request.duration" => new MetricStreamConfiguration { TagKeys = RequestTags },
+            // A limit well under the default of 2000 bounds what a burst of odd routes or status codes can cost.
+            "http.server.request.duration" => new MetricStreamConfiguration { TagKeys = RequestTags, CardinalityLimit = RequestCardinalityLimit },
             "http.server.active_requests" => new MetricStreamConfiguration { TagKeys = [] },
             "geolocation.lookups" => null,
             var name when RuntimeMetrics.Contains(name) => null,

@@ -30,7 +30,8 @@ public sealed class TelemetryTests : IClassFixture<GeoLocationApiFactory>
 
         var activity = Assert.Single(activities, a => a.OperationName == "GetGeoLocation");
         Assert.Equal(true, activity.GetTagItem("geolocation.found"));
-        Assert.Equal(ActivityStatusCode.Ok, activity.Status);
+        // Unset means "no error". Ok is reserved for explicitly marking a span as successful.
+        Assert.Equal(ActivityStatusCode.Unset, activity.Status);
     }
 
     private async Task<Activity> LookupSpan(Action<HttpRequestMessage>? configure = null)

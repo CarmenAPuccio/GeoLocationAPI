@@ -71,17 +71,26 @@ builder.Services.AddSingleton<Instrumentation>();
 // standard OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_PROTOCOL and OTEL_SERVICE_NAME environment variables.
 // With none set, the SDK exports gRPC to http://localhost:4317 as "GeoLocationAPI".
 var openTelemetry = builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService(
-        serviceName: "GeoLocationAPI",
-        serviceNamespace: "GeoLocation",
-        serviceVersion: Instrumentation.Version,
-        autoGenerateServiceInstanceId: false))
+    // Attributes that are the same for the life of the process belong on the resource, not on every span.
+    .ConfigureResource(resource => resource
+        .AddService(
+            serviceName: "GeoLocationAPI",
+            serviceNamespace: "GeoLocation",
+            serviceVersion: Instrumentation.Version)
+        .AddAttributes([new KeyValuePair<string, object>("deployment.environment.name", builder.Environment.EnvironmentName)]))
     .WithTracing(tracing => tracing
         .AddXRayTraceId()
+        // Failed work gets an Error status instead of staying Unset, so it can be found in a trace backend.
+        .SetErrorStatusOnException()
         // The ALB and ECS call the health check every few seconds. Tracing every call buries the real traces
         // (they would be nearly all of the traces). Failures still show up in logs and in the request metrics.
         .AddAspNetCoreInstrumentation(options =>
-            options.Filter = context => !context.Request.Path.StartsWithSegments(TelemetryViews.HealthCheckPath))
+        {
+            options.Filter = context => !context.Request.Path.StartsWithSegments(TelemetryViews.HealthCheckPath);
+            // Unhandled exceptions are returned as a 500 problem details body. The exception type, message and
+            // stack trace go on the request span, so a failed trace explains itself.
+            options.RecordException = true;
+        })
         .AddSource(Instrumentation.ActivitySourceName))
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
@@ -105,6 +114,7 @@ else
 Sdk.SetDefaultTextMapPropagator(new AWSXRayPropagator());
 
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ExceptionTraceHandler>();
 
 builder.Services.AddOptions<DbSettings>()
     .BindConfiguration(DbSettings.SectionName)

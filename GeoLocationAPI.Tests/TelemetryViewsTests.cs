@@ -20,6 +20,15 @@ public sealed class TelemetryViewsTests : IDisposable
     }
 
     [Fact]
+    public void RequestDuration_HasACardinalityLimitBelowTheDefault()
+    {
+        var view = TelemetryViews.Configure(_meter.CreateHistogram<double>("http.server.request.duration"));
+
+        Assert.NotNull(view);
+        Assert.Equal(100, view.CardinalityLimit);
+    }
+
+    [Fact]
     public void ActiveRequests_DropsAllTags()
     {
         var view = TelemetryViews.Configure(_meter.CreateUpDownCounter<long>("http.server.active_requests"));

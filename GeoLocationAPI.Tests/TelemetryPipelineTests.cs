@@ -1,4 +1,6 @@
 using GeoLocationAPI.V1.Helpers;
+using GeoLocationAPI.V1.Models;
+using GeoLocationAPI.V1.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -7,6 +9,7 @@ using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using System.Diagnostics;
+using System.Net;
 
 namespace GeoLocationAPI.Tests;
 
@@ -133,6 +136,52 @@ public sealed class TelemetryPipelineTests : IDisposable
 
         Assert.Contains("200", statuses);
         Assert.Contains("400", statuses);
+    }
+
+    private sealed class ThrowingService : IGeoLocationService
+    {
+        public GeoLocation GetGeoLocation(IPAddress ipAddress) => throw new InvalidOperationException("database unavailable");
+    }
+
+    private sealed class FailingLookupFactory : InMemoryTelemetryFactory
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            builder.ConfigureServices(services => services.AddSingleton<IGeoLocationService>(new ThrowingService()));
+        }
+    }
+
+    [Fact]
+    public async Task UnhandledException_IsRecordedOnTheRequestSpan()
+    {
+        using var failing = new FailingLookupFactory();
+        var client = failing.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/geolocation/8.8.8.8");
+        failing.Flush();
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        var span = Assert.Single(failing.Activities, a => a.GetTagItem("url.path")?.ToString() == "/api/v1/geolocation/8.8.8.8");
+        Assert.Equal(ActivityStatusCode.Error, span.Status);
+        var exception = Assert.Single(span.Events, e => e.Name == "exception");
+        Assert.Equal("System.InvalidOperationException", exception.Tags.Single(t => t.Key == "exception.type").Value);
+        Assert.Equal("database unavailable", exception.Tags.Single(t => t.Key == "exception.message").Value);
+    }
+
+    [Fact]
+    public void Resource_DescribesTheServiceAndItsEnvironment()
+    {
+        var attributes = _factory.Services.GetRequiredService<TracerProvider>().GetResource().Attributes.ToDictionary(a => a.Key, a => a.Value);
+
+        Assert.Equal("GeoLocationAPI", attributes["service.name"]);
+        Assert.Equal("GeoLocation", attributes["service.namespace"]);
+        Assert.Equal("Development", attributes["deployment.environment.name"]);
+        Assert.False(string.IsNullOrWhiteSpace(attributes["service.version"].ToString()));
+        // One per process, so telemetry from the two tasks can be told apart.
+        Assert.True(Guid.TryParse(attributes["service.instance.id"].ToString(), out _));
     }
 
     [Fact]

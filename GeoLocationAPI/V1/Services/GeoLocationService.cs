@@ -10,22 +10,22 @@ namespace GeoLocationAPI.V1.Services
 {
     /// <summary>
     /// GeoLocation Service. Holds a single memory-mapped database reader for the life of the application.
+    /// The service does not log looked-up addresses or put them on its own span, because an address can be the
+    /// caller's. The outcome is recorded as the <c>geolocation.found</c> span attribute and the
+    /// <c>geolocation.lookups</c> counter. (The request span still has ASP.NET Core's standard URL and client attributes.)
     /// </summary>
-    public sealed partial class GeoLocationService : IGeoLocationService, IDisposable
+    public sealed class GeoLocationService : IGeoLocationService, IDisposable
     {
-        private readonly ILogger<GeoLocationService> _logger;
         private readonly Instrumentation _instrumentation;
         private readonly DatabaseReader _reader;
 
         public GeoLocationService(
-            ILogger<GeoLocationService> logger,
             IOptions<DbSettings> dbSettings,
             Instrumentation instrumentation)
         {
             ArgumentNullException.ThrowIfNull(dbSettings);
             ArgumentNullException.ThrowIfNull(instrumentation);
 
-            _logger = logger;
             _instrumentation = instrumentation;
             _reader = new DatabaseReader(dbSettings.Value.ResolvedPath);
         }
@@ -53,11 +53,15 @@ namespace GeoLocationAPI.V1.Services
             {
                 response.IPFoundInGeoDB = false;
                 response.Message = $"{address} not found in the GeoDB";
-                LogNotFound(address);
             }
 
-            activity?.SetTag("geolocation.found", response.IPFoundInGeoDB);
-            activity?.SetStatus(ActivityStatusCode.Ok);
+            // The span is not recorded when the request itself is not (for example the health check).
+            // Status stays Unset, which means "no error". Ok is only for when success must be stated explicitly.
+            if (activity is { IsAllDataRequested: true })
+            {
+                activity.SetTag("geolocation.found", response.IPFoundInGeoDB);
+            }
+
             return response;
         }
 
@@ -65,8 +69,5 @@ namespace GeoLocationAPI.V1.Services
         {
             _reader.Dispose();
         }
-
-        [LoggerMessage(Level = LogLevel.Information, Message = "{IpAddress} not found in the GeoDB")]
-        private partial void LogNotFound(string ipAddress);
     }
 }
