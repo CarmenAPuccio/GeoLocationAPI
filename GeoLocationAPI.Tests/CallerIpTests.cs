@@ -11,9 +11,9 @@ public class CallerIpTests : IClassFixture<GeoLocationApiFactory>
 
     public CallerIpTests(GeoLocationApiFactory factory) => _client = factory.CreateClient();
 
-    private Task<HttpResponseMessage> GetAsCaller(string? remoteIp, string? forwardedFor = null)
+    private async Task<HttpResponseMessage> GetAsCaller(string? remoteIp, string? forwardedFor = null)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/geolocation");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/geolocation");
         if (remoteIp is not null)
         {
             request.Headers.Add(GeoLocationApiFactory.RemoteIpHeader, remoteIp);
@@ -24,7 +24,7 @@ public class CallerIpTests : IClassFixture<GeoLocationApiFactory>
             request.Headers.Add("X-Forwarded-For", forwardedFor);
         }
 
-        return _client.SendAsync(request);
+        return await _client.SendAsync(request);
     }
 
     [Fact]

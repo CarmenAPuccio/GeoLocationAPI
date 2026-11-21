@@ -11,7 +11,7 @@ using System.IO;
 
 namespace CdkGeoLocationApi
 {
-    public class CdkGeoLocationApiStack : Stack
+    public sealed class CdkGeoLocationApiStack : Stack
     {
         private const int ApiPort = 5254;
 
@@ -45,14 +45,14 @@ namespace CdkGeoLocationApi
 
             // Log groups the OpenTelemetry collector writes to. These names must match
             // aws-otel-collector/ecs-resource-detection.yaml.
-            LogGroup otelMetricsLogGroup = new LogGroup(this, "OtelMetricsLogGroup", new LogGroupProps
+            new LogGroup(this, "OtelMetricsLogGroup", new LogGroupProps
             {
                 LogGroupName = "/geolocationapi/otel/metrics",
                 Retention = RetentionDays.SIX_MONTHS,
                 RemovalPolicy = RemovalPolicy.DESTROY
             });
 
-            LogGroup otelLogsLogGroup = new LogGroup(this, "OtelLogsLogGroup", new LogGroupProps
+            new LogGroup(this, "OtelLogsLogGroup", new LogGroupProps
             {
                 LogGroupName = "/geolocationapi/otel/logs",
                 Retention = RetentionDays.SIX_MONTHS,
@@ -83,13 +83,13 @@ namespace CdkGeoLocationApi
             geoLocationAPITaskRole.AddToPolicy(new PolicyStatement(new PolicyStatementProps
             {
                 Resources = new[] {
-                    FormatArn(new ArnComponents
+                    Arn.Format(new ArnComponents
                     {
                         Service = "logs",
                         Resource = "log-group",
                         ResourceName = "/geolocationapi/otel/*",
                         ArnFormat = ArnFormat.COLON_RESOURCE_NAME
-                    })
+                    }, this)
                 },
                 Actions = new[] {
                     "logs:CreateLogGroup",
@@ -130,7 +130,7 @@ namespace CdkGeoLocationApi
             // Build the AWS OTEL Collector Container
             DockerImageAsset awsOTELCollectorAsset = new DockerImageAsset(this, "AWSOTELCollectorAsset", new DockerImageAssetProps
             {
-                Directory = Path.Combine(repositoryRoot, "aws-otel-collector"),
+                Directory = Path.Join(repositoryRoot, "aws-otel-collector"),
                 Platform = Platform_.LINUX_ARM64,
             });
 

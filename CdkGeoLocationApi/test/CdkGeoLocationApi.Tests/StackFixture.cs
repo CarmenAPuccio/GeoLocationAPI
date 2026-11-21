@@ -9,7 +9,7 @@ namespace CdkGeoLocationApi.Tests;
 /// </summary>
 public sealed class StackFixture : IDisposable
 {
-    private readonly string _outputDirectory = Path.Combine(Path.GetTempPath(), "cdk-geolocationapi-tests-" + Guid.NewGuid().ToString("N"));
+    private readonly string _outputDirectory = Path.Join(Path.GetTempPath(), "cdk-geolocationapi-tests-" + Guid.NewGuid().ToString("N"));
 
     public StackFixture()
     {
@@ -30,7 +30,7 @@ public sealed class StackFixture : IDisposable
         var nested = (NestedStack)Stack.Node.FindChild("GeoLocationAPIWafStack");
         Waf = Parse(Template.FromStack(nested).ToJSON());
 
-        AssetManifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(App.Synth().Directory, "CdkGeoLocationApiStack.assets.json"))).RootElement;
+        AssetManifest = JsonDocument.Parse(File.ReadAllText(Path.Join(App.Synth().Directory, "CdkGeoLocationApiStack.assets.json"))).RootElement;
     }
 
     public string RepositoryRoot { get; }
@@ -68,7 +68,7 @@ public sealed class StackFixture : IDisposable
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "global.json")))
+            if (File.Exists(Path.Join(directory.FullName, "global.json")))
             {
                 return directory.FullName;
             }

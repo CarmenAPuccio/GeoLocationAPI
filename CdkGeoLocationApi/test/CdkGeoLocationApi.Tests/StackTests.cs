@@ -22,7 +22,7 @@ public sealed class StackTests
 
         // The API only trusts X-Forwarded-For from this network, so the two must agree.
         var appSettings = JsonDocument.Parse(File.ReadAllText(
-            Path.Combine(_stack.RepositoryRoot, "GeoLocationAPI", "appsettings.Production.json"))).RootElement.GetProperty("ProxyInformation");
+            Path.Join(_stack.RepositoryRoot, "GeoLocationAPI", "appsettings.Production.json"))).RootElement.GetProperty("ProxyInformation");
         var cidr = $"{appSettings.GetProperty("ProxyKnownNetwork").GetString()}/{appSettings.GetProperty("ProxyKnownNetworkCIDR").GetInt32()}";
         Assert.Equal(cidr, vpc.GetProperty("CidrBlock").GetString());
     }
@@ -117,7 +117,7 @@ public sealed class StackTests
         Assert.Equal(3, groups.Count);
         Assert.All(groups, g => Assert.Equal(180, g.GetProperty("RetentionInDays").GetInt32()));
 
-        var collectorConfig = File.ReadAllText(Path.Combine(_stack.RepositoryRoot, "aws-otel-collector", "ecs-resource-detection.yaml"));
+        var collectorConfig = File.ReadAllText(Path.Join(_stack.RepositoryRoot, "aws-otel-collector", "ecs-resource-detection.yaml"));
         foreach (var name in new[] { "/geolocationapi/otel/metrics", "/geolocationapi/otel/logs" })
         {
             Assert.Contains(groups, g => g.TryGetProperty("LogGroupName", out var n) && n.GetString() == name);
@@ -174,33 +174,33 @@ public sealed class StackTests
         var api = Assert.Single(images, i => i.TryGetProperty("dockerFile", out _));
         Assert.Equal("GeoLocationAPI/Dockerfile", api.GetProperty("dockerFile").GetString());
         Assert.Equal(_stack.RepositoryRoot, api.GetProperty("directory").GetString());
-        Assert.True(File.Exists(Path.Combine(_stack.RepositoryRoot, api.GetProperty("dockerFile").GetString()!)));
+        Assert.True(File.Exists(Path.Join(_stack.RepositoryRoot, api.GetProperty("dockerFile").GetString()!)));
 
         var collector = Assert.Single(images, i => !i.TryGetProperty("dockerFile", out _));
-        Assert.Equal(Path.Combine(_stack.RepositoryRoot, "aws-otel-collector"), collector.GetProperty("directory").GetString());
+        Assert.Equal(Path.Join(_stack.RepositoryRoot, "aws-otel-collector"), collector.GetProperty("directory").GetString());
     }
 
     [Fact]
     public void Stack_DefaultsRepositoryRootToTheParentDirectory()
     {
         var original = Environment.CurrentDirectory;
-        var scratch = Path.Combine(Path.GetTempPath(), "cdk-geolocationapi-default-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(Path.Combine(scratch, "work"));
-        Directory.CreateDirectory(Path.Combine(scratch, "aws-otel-collector"));
-        Directory.CreateDirectory(Path.Combine(scratch, "GeoLocationAPI"));
-        File.WriteAllText(Path.Combine(scratch, "GeoLocationAPI", "Dockerfile"), "FROM scratch");
-        File.WriteAllText(Path.Combine(scratch, "aws-otel-collector", "Dockerfile"), "FROM scratch");
+        var scratch = Path.Join(Path.GetTempPath(), "cdk-geolocationapi-default-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Join(scratch, "work"));
+        Directory.CreateDirectory(Path.Join(scratch, "aws-otel-collector"));
+        Directory.CreateDirectory(Path.Join(scratch, "GeoLocationAPI"));
+        File.WriteAllText(Path.Join(scratch, "GeoLocationAPI", "Dockerfile"), "FROM scratch");
+        File.WriteAllText(Path.Join(scratch, "aws-otel-collector", "Dockerfile"), "FROM scratch");
 
         try
         {
             // cdk runs from CdkGeoLocationApi, so ".." is the repository root.
-            Environment.CurrentDirectory = Path.Combine(scratch, "work");
+            Environment.CurrentDirectory = Path.Join(scratch, "work");
             var app = Program.BuildApp(new Amazon.CDK.AppProps
             {
-                Outdir = Path.Combine(scratch, "out"),
+                Outdir = Path.Join(scratch, "out"),
                 Context = new Dictionary<string, object> { ["aws:cdk:disable-asset-staging"] = true },
             });
-            var assets = JsonDocument.Parse(File.ReadAllText(Path.Combine(app.Synth().Directory, "CdkGeoLocationApiStack.assets.json"))).RootElement;
+            var assets = JsonDocument.Parse(File.ReadAllText(Path.Join(app.Synth().Directory, "CdkGeoLocationApiStack.assets.json"))).RootElement;
 
             var api = assets.GetProperty("dockerImages").EnumerateObject().Select(i => i.Value.GetProperty("source")).Single(s => s.TryGetProperty("dockerFile", out _));
             // Compare names, because the temp directory is a symlink on macOS (/var is /private/var).

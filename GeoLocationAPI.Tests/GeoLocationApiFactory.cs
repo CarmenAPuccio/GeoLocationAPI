@@ -20,7 +20,7 @@ public class GeoLocationApiFactory : WebApplicationFactory<Program>
         builder.UseEnvironment(EnvironmentName);
 
         // The database is copied next to the test assembly via the project reference.
-        builder.UseSetting("DBSettings:GeoLite2CityDB", Path.Combine(AppContext.BaseDirectory, "GeoLite2-City.mmdb"));
+        builder.UseSetting("DBSettings:GeoLite2CityDB", Path.Join(AppContext.BaseDirectory, "GeoLite2-City.mmdb"));
 
         builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, RemoteIpStartupFilter>());
     }

@@ -13,7 +13,7 @@ public sealed class GeoLocationServiceTests : IDisposable
 
     public GeoLocationServiceTests()
     {
-        var settings = Options.Create(new DbSettings { GeoLite2CityDB = Path.Combine(AppContext.BaseDirectory, "GeoLite2-City.mmdb") });
+        var settings = Options.Create(new DbSettings { GeoLite2CityDB = Path.Join(AppContext.BaseDirectory, "GeoLite2-City.mmdb") });
         _service = new GeoLocationService(settings, _instrumentation);
     }
 
