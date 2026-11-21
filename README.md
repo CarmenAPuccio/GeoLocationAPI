@@ -160,7 +160,7 @@ dotnet test GeoLocationAPI.sln      # everything
 - invalid addresses and unknown routes returning problem details, and the IP parser on its own
 - the health check (healthy, address missing, lookup failing, its logging), API version headers, the OpenAPI document, and the Scalar page, which is absent in Production
 - the app refusing to start with a missing or invalid setting
-- telemetry: spans, the X-Ray trace ID format and header continuation, the metric allowlist and tags, delta temporality, the health check being neither traced nor counted, and the Production console log level
+- telemetry: spans, the X-Ray trace ID format and header continuation, exceptions recorded on the request span, the resource attributes, the metric allowlist, tags and cardinality limit, delta temporality, the health check being neither traced nor counted, and the Production console log level
 
 **CDK tests** (`CdkGeoLocationApi/test/CdkGeoLocationApi.Tests`) synthesize the stack and assert on the CloudFormation: task size and ARM64, the containers, the task role's permissions, log groups, the service and load balancer, the Docker build contexts and the WAF rules. They also check that the VPC CIDR matches the API's trusted proxy network and that the collector's log group names match the collector configuration.
 
