@@ -1,18 +1,13 @@
-﻿using GeoLocationAPI.V1.Models;
+using GeoLocationAPI.V1.Models;
+using System.Net;
 
 namespace GeoLocationAPI.V1.Services
 {
-    /// <summary>
-    /// IGeoLocationService Interface
-    /// </summary>
     public interface IGeoLocationService
     {
         /// <summary>
-        /// 
+        /// Looks up the location of an IP address in the GeoLite2 City database.
         /// </summary>
-        /// <param name="incomingIP">The IP passed in from the GeoLocationController</param>
-        /// <returns></returns>
-        Task<GeoLocation> GetGeoLocationByIPAsync(string incomingIP);
-
+        GeoLocation GetGeoLocation(IPAddress ipAddress);
     }
 }

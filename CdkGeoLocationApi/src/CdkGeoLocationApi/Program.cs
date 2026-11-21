@@ -1,14 +1,21 @@
-﻿using Amazon.CDK;
+using Amazon.CDK;
+using System.Diagnostics.CodeAnalysis;
 
 namespace CdkGeoLocationApi
 {
-    sealed class Program
+    internal static class Program
     {
-        public static void Main(string[] args)
+        [ExcludeFromCodeCoverage(Justification = "Two-line entry point. cdk synth runs it; BuildApp is what the tests cover.")]
+        public static void Main()
         {
-            var app = new App();
-            new CdkGeoLocationApiStack(app, "CdkGeoLocationApiStack", new StackProps { });
-            app.Synth();
+            BuildApp().Synth();
+        }
+
+        internal static App BuildApp(IAppProps? props = null, string? repositoryRoot = null)
+        {
+            var app = new App(props);
+            new CdkGeoLocationApiStack(app, "CdkGeoLocationApiStack", new StackProps(), repositoryRoot);
+            return app;
         }
     }
 }

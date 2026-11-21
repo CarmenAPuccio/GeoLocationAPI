@@ -1,0 +1,6 @@
+[*.cs]
+# CDK idioms: constructs register themselves with their scope, so "new" without assignment is normal,
+# infrastructure code runs once so constant arrays are fine, and "Stack" is the conventional suffix.
+dotnet_diagnostic.CA1806.severity = none
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.CA1711.severity = none

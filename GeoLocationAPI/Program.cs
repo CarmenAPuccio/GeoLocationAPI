@@ -1,18 +1,21 @@
-using GeoLocationAPI.Swagger;
+using Asp.Versioning;
+using GeoLocationAPI.Configuration;
 using GeoLocationAPI.V1.HealthChecks;
 using GeoLocationAPI.V1.Services;
+using GeoLocationAPI.V1.Helpers;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+using Microsoft.OpenApi;
 using OpenTelemetry;
-using OpenTelemetry.Contrib.Extensions.AWSXRay.Trace;
+using OpenTelemetry.Extensions.AWS.Trace;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using Scalar.AspNetCore;
 using System.Net;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -27,104 +30,139 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-//builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddApiVersioning(
-
-    options =>
+builder.Services.AddApiVersioning(options =>
     {
-        // reporting api versions will return the headers "api-supported-versions" and "api-deprecated-versions"
+        // Adds the "api-supported-versions" and "api-deprecated-versions" response headers.
         options.ReportApiVersions = true;
 
-    });
-builder.Services.AddVersionedApiExplorer(
-    options =>
+        // Every route carries the version in the URL, for example /api/v1/geolocation.
+        options.ApiVersionReader = new UrlSegmentApiVersionReader();
+    })
+    .AddMvc()
+    .AddApiExplorer(options =>
     {
-        // add the versioned api explorer, which also adds IApiVersionDescriptionProvider service
-        // note: the specified format code will format the version as "'v'major[.minor][-status]"
+        // Formats the version as "'v'major[.minor][-status]", for example "v1". This is also the OpenAPI document name.
         options.GroupNameFormat = "'v'VVV";
 
-        // note: this option is only necessary when versioning by url segment. the SubstitutionFormat
-        // can also be used to control the format of the API version in route templates
+        // Replaces {version:apiVersion} in route templates with the actual version.
         options.SubstituteApiVersionInUrl = true;
-    });
-builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
-
-builder.Services.AddSwaggerGen(
-        options =>
-        {
-            // add a custom operation filter which sets default values
-            options.OperationFilter<SwaggerDefaultValues>();
-
-
-            var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-            options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
-
-            // integrate xml comments
-            //options.IncludeXmlComments(xmlFilename);
-
-        });
-
-Sdk.CreateTracerProviderBuilder()
-    .SetResourceBuilder(
-        ResourceBuilder.CreateDefault().AddService(
-            builder.Configuration.GetValue<string>("ServiceName"),
-            serviceNamespace: "GeoLocation",
-            autoGenerateServiceInstanceId: false)
-        .AddTelemetrySdk())
-    .AddXRayTraceId()
-    .AddAWSInstrumentation()
-    .AddAspNetCoreInstrumentation()
-    .AddHttpClientInstrumentation()
-    .AddOtlpExporter(otlpOptions =>
-    {
-        otlpOptions.Endpoint = new Uri(builder.Configuration.GetValue<string>("OTEL_OTLP_ENDPOINT"));
     })
-    .AddConsoleExporter()
-    .Build();
+    // One OpenAPI document per API version. XML doc comments are picked up at build time.
+    .AddOpenApi(options =>
+    {
+        options.Document.AddDocumentTransformer((document, context, cancellationToken) =>
+        {
+            document.Info = new OpenApiInfo
+            {
+                Title = "GeoLocationAPI",
+                Version = options.Description.ApiVersion.ToString(),
+                Description = ".NET Web API for retrieving geolocations. Geolocation data provided by MaxMind GeoLite2."
+                    + (options.Description.IsDeprecated ? " This API version has been deprecated." : string.Empty),
+                Contact = new OpenApiContact { Name = "Carmen Puccio", Email = "CarmenAPuccio@gmail.com" },
+                License = new OpenApiLicense { Name = "Apache 2.0", Url = new Uri("https://www.apache.org/licenses/LICENSE-2.0") }
+            };
+            return Task.CompletedTask;
+        });
+    });
 
+builder.Services.AddSingleton<Instrumentation>();
+
+// Traces, metrics and logs are exported over OTLP. The endpoint, protocol and service name come from the
+// standard OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_PROTOCOL and OTEL_SERVICE_NAME environment variables.
+// With none set, the SDK exports gRPC to http://localhost:4317 as "GeoLocationAPI".
+var openTelemetry = builder.Services.AddOpenTelemetry()
+    // Attributes that are the same for the life of the process belong on the resource, not on every span.
+    .ConfigureResource(resource => resource
+        .AddService(
+            serviceName: "GeoLocationAPI",
+            serviceNamespace: "GeoLocation",
+            serviceVersion: Instrumentation.Version)
+        .AddAttributes([new KeyValuePair<string, object>("deployment.environment.name", builder.Environment.EnvironmentName)]))
+    .WithTracing(tracing => tracing
+        .AddXRayTraceId()
+        // Failed work gets an Error status instead of staying Unset, so it can be found in a trace backend.
+        .SetErrorStatusOnException()
+        // The ALB and ECS call the health check every few seconds. Tracing every call buries the real traces
+        // (they would be nearly all of the traces). Failures still show up in logs and in the request metrics.
+        .AddAspNetCoreInstrumentation(options =>
+        {
+            options.Filter = context => !context.Request.Path.StartsWithSegments(TelemetryViews.HealthCheckPath);
+            // Unhandled exceptions are returned as a 500 problem details body. The exception type, message and
+            // stack trace go on the request span, so a failed trace explains itself.
+            options.RecordException = true;
+        })
+        .AddSource(Instrumentation.ActivitySourceName))
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddRuntimeInstrumentation()
+        .AddMeter(Instrumentation.ActivitySourceName)
+        .AddView(TelemetryViews.Configure))
+    .WithLogging()
+    .UseOtlpExporter();
+
+if (builder.Environment.IsDevelopment())
+{
+    openTelemetry.WithTracing(tracing => tracing.AddConsoleExporter());
+}
+else
+{
+    // Logs reach CloudWatch through OTLP, so the console would store every line a second time. Warnings and
+    // errors stay on the console as a fallback for when the collector sidecar is unavailable.
+    builder.Logging.AddFilter<Microsoft.Extensions.Logging.Console.ConsoleLoggerProvider>(null, LogLevel.Warning);
+}
 
 Sdk.SetDefaultTextMapPropagator(new AWSXRayPropagator());
 
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ExceptionTraceHandler>();
+
+builder.Services.AddOptions<DbSettings>()
+    .BindConfiguration(DbSettings.SectionName)
+    .ValidateDataAnnotations()
+    .Validate(o => File.Exists(o.ResolvedPath), "DBSettings:GeoLite2CityDB does not point to an existing file.")
+    .ValidateOnStart();
+
+builder.Services.AddOptions<ProxyInformation>()
+    .BindConfiguration(ProxyInformation.SectionName)
+    .ValidateDataAnnotations()
+    .Validate(o => IPAddress.TryParse(o.ProxyKnownNetwork, out _), "ProxyInformation:ProxyKnownNetwork is not a valid IP address.")
+    .ValidateOnStart();
+
 builder.Services.AddSingleton<IGeoLocationService, GeoLocationService>();
+
+var healthCheckIp = Required("HealthCheck:IpToTest");
+if (!IPAddress.TryParse(healthCheckIp, out _))
+{
+    throw new InvalidOperationException("HealthCheck:IpToTest is not a valid IP address.");
+}
+
 builder.Services.AddHealthChecks()
     .AddTypeActivatedCheck<GeoLocationHealthCheck>(
         "GeoLocationHealthCheck",
-        args: new object[] {
-            builder.Configuration.GetValue<string>("HealtcheckBaseURL"),
-            builder.Configuration.GetValue<string>("HealtcheckIPToTest")
-            }
-        );
+        args: new object[] { healthCheckIp });
 
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders =
-    ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Add(new IPNetwork(IPAddress.Parse(builder.Configuration["ProxyInformation:ProxyKnownNetwork"]), Int32.Parse(builder.Configuration["ProxyInformation:ProxyKnownNetworkCIDR"])));
-    options.ForwardLimit = null;
-
-});
+builder.Services.AddOptions<ForwardedHeadersOptions>()
+    .Configure<IOptions<ProxyInformation>>((options, proxy) =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.KnownIPNetworks.Add(new System.Net.IPNetwork(
+            IPAddress.Parse(proxy.Value.ProxyKnownNetwork),
+            proxy.Value.ProxyKnownNetworkCIDR));
+        options.ForwardLimit = null;
+    });
 
 var app = builder.Build();
 
-var apiVersionDescriptionProvider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
-
 // Configure the HTTP request pipeline.
+// Unhandled exceptions and empty 4xx/5xx responses are returned as RFC 9457 problem details.
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+
 if (app.Environment.IsDevelopment())
 {
-    app.UseDeveloperExceptionPage();
-
-    app.UseSwagger();
-
-    app.UseSwaggerUI(
-        options =>
-        {
-            // build a swagger endpoint for each discovered API version
-            foreach (var description in apiVersionDescriptionProvider.ApiVersionDescriptions)
-            {
-                options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
-            }
-        });
+    // OpenAPI document at /openapi/v1.json, interactive reference at /scalar/v1.
+    app.MapOpenApi().WithDocumentPerVersion();
+    app.MapScalarApiReference();
 }
 
 app.UseForwardedHeaders();
@@ -139,6 +177,9 @@ app.MapHealthChecks("/hc", new HealthCheckOptions
 });
 
 app.Run();
+
+string Required(string key) =>
+    builder.Configuration[key] ?? throw new InvalidOperationException($"Required configuration value '{key}' is missing.");
 
 Task WriteResponse(HttpContext context, HealthReport healthReport)
 {
@@ -186,3 +227,6 @@ Task WriteResponse(HttpContext context, HealthReport healthReport)
 }
 
 
+
+// Makes the entry point visible to WebApplicationFactory in the test project.
+public partial class Program { }

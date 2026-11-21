@@ -1,3 +1,6 @@
+# Images are not published for this project. Build and push them to your own registry, then substitute
+# REGISTRY and TAG when applying (see "Running on Kubernetes" in the README):
+#   envsubst < templates/geolocationapi.yaml | kubectl apply -f -
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -42,21 +45,16 @@ spec:
         app: geolocationapi
     spec: 
       containers: 
-        - image: "carmenpuccio/aws-otel-collector:latest"
-          name: aws-otel-collector           
-        - image: "carmenpuccio/geolocationapi:latest"
+        - image: "${REGISTRY}/aws-otel-collector:${TAG}"
+          name: aws-otel-collector
+          args: ["--config=/etc/ecs/ecs-resource-detection.yaml"]
+        - image: "${REGISTRY}/geolocationapi:${TAG}"
           name: geolocationapi
           env: 
             - name: ASPNETCORE_ENVIRONMENT
               value: Production
-            - name: ASPNETCORE_URLS
-              value: "http://+:5254"
-            - name: OTEL_OTLP_ENDPOINT
-              value: "http://localhost:4317"
-            - name: HealtcheckBaseURL
-              value: "http://localhost:5254/api/v1/geolocation/"
-            - name: HealtcheckIPToTest
-              value: "8.8.8.8"
+            # The port (5254) is set in the image. The OTLP endpoint defaults to http://localhost:4317,
+            # which reaches the collector container in this pod.
           ports: 
             - containerPort: 5254
               name: geolocationapi

@@ -1,0 +1,4 @@
+services:
+  geolocationapi:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development

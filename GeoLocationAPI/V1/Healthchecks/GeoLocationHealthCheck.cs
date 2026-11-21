@@ -1,55 +1,57 @@
-﻿using GeoLocationAPI.V1.Models;
+using GeoLocationAPI.V1.Services;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Net;
 
 namespace GeoLocationAPI.V1.HealthChecks
 {
-    public class GeoLocationHealthCheck : IHealthCheck
+    /// <summary>
+    /// Looks up a known IP address in the database to prove the service and data file are usable.
+    /// </summary>
+    public sealed partial class GeoLocationHealthCheck : IHealthCheck
     {
+        private readonly IGeoLocationService _geoLocationService;
+        private readonly ILogger<GeoLocationHealthCheck> _logger;
+        private readonly IPAddress _ipToTest;
 
-        private readonly string _healthcheckBaseURL;
-        private readonly string _healtcheckIPToTest;
-
-        public GeoLocationHealthCheck(
-
-            string healthcheckBaseURL,
-            string healtcheckIPToTest)
+        public GeoLocationHealthCheck(IGeoLocationService geoLocationService, ILogger<GeoLocationHealthCheck> logger, string ipToTest)
         {
-
-            _healthcheckBaseURL = healthcheckBaseURL;
-            _healtcheckIPToTest = healtcheckIPToTest;
+            _geoLocationService = geoLocationService;
+            _logger = logger;
+            _ipToTest = IPAddress.Parse(ipToTest);
         }
 
-        public async Task<HealthCheckResult> CheckHealthAsync(
-         HealthCheckContext context,
-         CancellationToken cancellationToken = default(CancellationToken))
+        public Task<HealthCheckResult> CheckHealthAsync(
+            HealthCheckContext context,
+            CancellationToken cancellationToken = default)
         {
-            // No validation done on the url below.
-            // Ensure that the HealtcheckBaseURL value from appsettings.json has a trailing slash.
-            // ex: "HealtcheckBaseURL": "http://localhost:5254/api/v1/geolocation/"
-            string url = _healthcheckBaseURL + _healtcheckIPToTest;
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.TryAddWithoutValidation("From", "GeoLocationHealthCheck@example.com");
-            var client = new HttpClient();
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-
             try
             {
-                var json = await response.Content.ReadFromJsonAsync<GeoLocation>();
-                if (response.IsSuccessStatusCode && json?.Message == _healtcheckIPToTest + " found in the GeoDB")
-                {
-                    return HealthCheckResult.Healthy("The healthcheck is healthy - " + json?.Message);
+                var result = _geoLocationService.GetGeoLocation(_ipToTest);
+                var data = new Dictionary<string, object> { ["ipAddress"] = result.IPAddress };
 
+                if (result.IPFoundInGeoDB)
+                {
+                    return Task.FromResult(HealthCheckResult.Healthy("The healthcheck is healthy - " + result.Message, data));
                 }
-                return
-                    new HealthCheckResult(
-                        context.Registration.FailureStatus, "The healthcheck indicates an unhealthy result." + json?.Message);
+
+                LogAddressNotFound(_ipToTest.ToString());
+                return Task.FromResult(new HealthCheckResult(context.Registration.FailureStatus,
+                    "The healthcheck indicates an unhealthy result. " + result.Message, data: data));
             }
             catch (Exception ex)
             {
-                return
-                    new HealthCheckResult(
-                        context.Registration.FailureStatus, "The healthcheck indicates an unhealthy result." + ex.ToString());
+                LogLookupFailed(ex, _ipToTest.ToString());
+                return Task.FromResult(new HealthCheckResult(
+                    context.Registration.FailureStatus,
+                    "The healthcheck indicates an unhealthy result.",
+                    ex));
             }
         }
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Health check failed: {IpAddress} was not found in the GeoDB")]
+        private partial void LogAddressNotFound(string ipAddress);
+
+        [LoggerMessage(Level = LogLevel.Error, Message = "Health check failed: the lookup of {IpAddress} threw an exception")]
+        private partial void LogLookupFailed(Exception exception, string ipAddress);
     }
 }
