@@ -36,7 +36,7 @@ exporters:
     # Annotations are indexed, so traces can be filtered by them in X-Ray: annotation.geolocation_found = true
     indexed_attributes: ["geolocation.found"]
   awsemf:
-    # One metric per attribute combination, instead of the extra rolled-up copies the default creates.
+    # One metric per attribute combination, with no rolled-up copies.
     dimension_rollup_option: NoDimensionRollup
     namespace: ECS/AWSOTel/Application
     log_group_name: '/geolocationapi/otel/metrics'

@@ -79,7 +79,7 @@ var openTelemetry = builder.Services.AddOpenTelemetry()
     .WithTracing(tracing => tracing
         .AddXRayTraceId()
         // The ALB and ECS call the health check every few seconds. Tracing every call buries the real traces
-        // (99% of them in the first deployment). Failures still show up in logs and in the request metrics.
+        // (they would be nearly all of the traces). Failures still show up in logs and in the request metrics.
         .AddAspNetCoreInstrumentation(options =>
             options.Filter = context => !context.Request.Path.StartsWithSegments(TelemetryViews.HealthCheckPath))
         .AddSource(Instrumentation.ActivitySourceName))
