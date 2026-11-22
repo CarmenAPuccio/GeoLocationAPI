@@ -5,301 +5,300 @@ using Amazon.CDK.AWS.WAFv2;
 using static Amazon.CDK.AWS.WAFv2.CfnWebACL;
 using System.Collections.Generic;
 
-namespace CdkGeoLocationApi
+namespace CdkGeoLocationApi;
+
+sealed class ResourceNestedStackProps : NestedStackProps
 {
-    sealed class ResourceNestedStackProps : NestedStackProps
-    {
-        public required string ALBResourceArn { get; init; }
-    }
-    sealed class CdkGeoLocationApiWafStack : NestedStack
-    {
-        // Requests allowed per client IP in each evaluation window. Over that, the IP gets a 429 until its rate drops.
-        // WAF evaluates the rate periodically, so an IP can briefly exceed the limit before it is blocked.
-        private const int RateLimit = 300;
-        private const int RateLimitWindowSeconds = 300;
+    public required string ALBResourceArn { get; init; }
+}
+sealed class CdkGeoLocationApiWafStack : NestedStack
+{
+    // Requests allowed per client IP in each evaluation window. Over that, the IP gets a 429 until its rate drops.
+    // WAF evaluates the rate periodically, so an IP can briefly exceed the limit before it is blocked.
+    private const int RateLimit = 300;
+    private const int RateLimitWindowSeconds = 300;
 
-        public CdkGeoLocationApiWafStack(Construct scope, string id, ResourceNestedStackProps props) : base(scope, id, props)
+    public CdkGeoLocationApiWafStack(Construct scope, string id, ResourceNestedStackProps props) : base(scope, id, props)
+    {
+        // Create the WAFv2 WebACL
+        CfnWebACL geoLocationAPIWAFWebACL = new CfnWebACL(this, "GeoLocationAPIWAFWebACL", new CfnWebACLProps
         {
-            // Create the WAFv2 WebACL
-            CfnWebACL geoLocationAPIWAFWebACL = new CfnWebACL(this, "GeoLocationAPIWAFWebACL", new CfnWebACLProps
+            Name = "GeoLocationAPIWAFWebACL",
+            Description = "GeoLocationAPIWAFWebACL",
+            DefaultAction = new DefaultActionProperty
             {
-                Name = "GeoLocationAPIWAFWebACL",
-                Description = "GeoLocationAPIWAFWebACL",
-                DefaultAction = new DefaultActionProperty
+                Block = new BlockActionProperty { }
+            },
+            Scope = "REGIONAL",
+            VisibilityConfig = new VisibilityConfigProperty
+            {
+                CloudWatchMetricsEnabled = true,
+                MetricName = "GeoLocationAPIWAFWebACL",
+                SampledRequestsEnabled = true
+            },
+            Rules = new[]
+            {
+                new RuleProperty
                 {
-                    Block = new BlockActionProperty { }
+                    Name = "AWS-AWSManagedRulesCommonRuleSet",
+                    Priority = 0,
+                    OverrideAction = new OverrideActionProperty
+                    {
+                        None = new Dictionary<string, object> { }
+                    },
+                    Statement = new StatementProperty
+                    {
+                        ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
+                        {
+                            VendorName = "AWS",
+                            Name = "AWSManagedRulesCommonRuleSet"
+                        }
+                    },
+                    VisibilityConfig = new VisibilityConfigProperty
+                    {
+                        CloudWatchMetricsEnabled = true,
+                        MetricName = "AWS-AWSManagedRulesCommonRuleSet",
+                        SampledRequestsEnabled = true
+                    },
                 },
-                Scope = "REGIONAL",
-                VisibilityConfig = new VisibilityConfigProperty
+
+                new RuleProperty
                 {
-                    CloudWatchMetricsEnabled = true,
-                    MetricName = "GeoLocationAPIWAFWebACL",
-                    SampledRequestsEnabled = true
+                    Name = "AWS-AWSManagedRulesKnownBadInputsRuleSet",
+                    Priority = 1,
+                    OverrideAction = new OverrideActionProperty
+                    {
+                        None = new Dictionary<string, object> { }
+                    },
+                    Statement = new StatementProperty
+                    {
+                        ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
+                        {
+                            VendorName = "AWS",
+                            Name = "AWSManagedRulesKnownBadInputsRuleSet"
+                        }
+                    },
+                    VisibilityConfig = new VisibilityConfigProperty
+                    {
+                        CloudWatchMetricsEnabled = true,
+                        MetricName = "AWS-AWSManagedRulesKnownBadInputsRuleSet",
+                        SampledRequestsEnabled = true
+                    },
                 },
-                Rules = new[]
+
+                new RuleProperty
                 {
-                    new RuleProperty
+                    Name = "AWS-AWSManagedRulesLinuxRuleSet",
+                    Priority = 2,
+                    OverrideAction = new OverrideActionProperty
                     {
-                        Name = "AWS-AWSManagedRulesCommonRuleSet",
-                        Priority = 0,
-                        OverrideAction = new OverrideActionProperty
-                        {
-                            None = new Dictionary<string, object> { }
-                        },
-                        Statement = new StatementProperty
-                        {
-                            ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
-                            {
-                                VendorName = "AWS",
-                                Name = "AWSManagedRulesCommonRuleSet"
-                            }
-                        },
-                        VisibilityConfig = new VisibilityConfigProperty
-                        {
-                            CloudWatchMetricsEnabled = true,
-                            MetricName = "AWS-AWSManagedRulesCommonRuleSet",
-                            SampledRequestsEnabled = true
-                        },
+                        None = new Dictionary<string, object> { }
                     },
+                    Statement = new StatementProperty
+                    {
+                        ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
+                        {
+                            VendorName = "AWS",
+                            Name = "AWSManagedRulesLinuxRuleSet"
+                        }
+                    },
+                    VisibilityConfig = new VisibilityConfigProperty
+                    {
+                        CloudWatchMetricsEnabled = true,
+                        MetricName = "AWS-AWSManagedRulesLinuxRuleSet",
+                        SampledRequestsEnabled = true
+                    },
+                },
 
-                    new RuleProperty
+                new RuleProperty
+                {
+                    Name = "AWS-AWSManagedRulesUnixRuleSet",
+                    Priority = 3,
+                    OverrideAction = new OverrideActionProperty
                     {
-                        Name = "AWS-AWSManagedRulesKnownBadInputsRuleSet",
-                        Priority = 1,
-                        OverrideAction = new OverrideActionProperty
-                        {
-                            None = new Dictionary<string, object> { }
-                        },
-                        Statement = new StatementProperty
-                        {
-                            ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
-                            {
-                                VendorName = "AWS",
-                                Name = "AWSManagedRulesKnownBadInputsRuleSet"
-                            }
-                        },
-                        VisibilityConfig = new VisibilityConfigProperty
-                        {
-                            CloudWatchMetricsEnabled = true,
-                            MetricName = "AWS-AWSManagedRulesKnownBadInputsRuleSet",
-                            SampledRequestsEnabled = true
-                        },
+                        None = new Dictionary<string, object> { }
                     },
+                    Statement = new StatementProperty
+                    {
+                        ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
+                        {
+                            VendorName = "AWS",
+                            Name = "AWSManagedRulesUnixRuleSet"
+                        }
+                    },
+                    VisibilityConfig = new VisibilityConfigProperty
+                    {
+                        CloudWatchMetricsEnabled = true,
+                        MetricName = "AWS-AWSManagedRulesUnixRuleSet",
+                        SampledRequestsEnabled = true
+                    },
+                },
 
-                    new RuleProperty
+                new RuleProperty
+                {
+                    Name = "AWS-AWSManagedRulesAmazonIpReputationList",
+                    Priority = 4,
+                    OverrideAction = new OverrideActionProperty
                     {
-                        Name = "AWS-AWSManagedRulesLinuxRuleSet",
-                        Priority = 2,
-                        OverrideAction = new OverrideActionProperty
-                        {
-                            None = new Dictionary<string, object> { }
-                        },
-                        Statement = new StatementProperty
-                        {
-                            ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
-                            {
-                                VendorName = "AWS",
-                                Name = "AWSManagedRulesLinuxRuleSet"
-                            }
-                        },
-                        VisibilityConfig = new VisibilityConfigProperty
-                        {
-                            CloudWatchMetricsEnabled = true,
-                            MetricName = "AWS-AWSManagedRulesLinuxRuleSet",
-                            SampledRequestsEnabled = true
-                        },
+                        None = new Dictionary<string, object> { }
                     },
+                    Statement = new StatementProperty
+                    {
+                        ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
+                        {
+                            VendorName = "AWS",
+                            Name = "AWSManagedRulesAmazonIpReputationList"
+                        }
+                    },
+                    VisibilityConfig = new VisibilityConfigProperty
+                    {
+                        CloudWatchMetricsEnabled = true,
+                        MetricName = "AWS-AWSManagedRulesAmazonIpReputationList",
+                        SampledRequestsEnabled = true
+                    },
+                },
 
-                    new RuleProperty
+                new RuleProperty
+                {
+                    Name = "AWS-AWSManagedRulesAnonymousIpList",
+                    Priority = 5,
+                    OverrideAction = new OverrideActionProperty
                     {
-                        Name = "AWS-AWSManagedRulesUnixRuleSet",
-                        Priority = 3,
-                        OverrideAction = new OverrideActionProperty
-                        {
-                            None = new Dictionary<string, object> { }
-                        },
-                        Statement = new StatementProperty
-                        {
-                            ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
-                            {
-                                VendorName = "AWS",
-                                Name = "AWSManagedRulesUnixRuleSet"
-                            }
-                        },
-                        VisibilityConfig = new VisibilityConfigProperty
-                        {
-                            CloudWatchMetricsEnabled = true,
-                            MetricName = "AWS-AWSManagedRulesUnixRuleSet",
-                            SampledRequestsEnabled = true
-                        },
+                        None = new Dictionary<string, object> { }
                     },
+                    Statement = new StatementProperty
+                    {
+                        ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
+                        {
+                            VendorName = "AWS",
+                            Name = "AWSManagedRulesAnonymousIpList"
+                        }
+                    },
+                    VisibilityConfig = new VisibilityConfigProperty
+                    {
+                        CloudWatchMetricsEnabled = true,
+                        MetricName = "AWS-AWSManagedRulesAnonymousIpList",
+                        SampledRequestsEnabled = true
+                    },
+                },
 
-                    new RuleProperty
+                new RuleProperty
+                {
+                    // Evaluated before the allow rule, because Allow ends evaluation.
+                    Name = "GeoLocationAPI-RateLimit",
+                    Priority = 6,
+                    Action = new RuleActionProperty
                     {
-                        Name = "AWS-AWSManagedRulesAmazonIpReputationList",
-                        Priority = 4,
-                        OverrideAction = new OverrideActionProperty
+                        Block = new BlockActionProperty
                         {
-                            None = new Dictionary<string, object> { }
-                        },
-                        Statement = new StatementProperty
-                        {
-                            ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
-                            {
-                                VendorName = "AWS",
-                                Name = "AWSManagedRulesAmazonIpReputationList"
-                            }
-                        },
-                        VisibilityConfig = new VisibilityConfigProperty
-                        {
-                            CloudWatchMetricsEnabled = true,
-                            MetricName = "AWS-AWSManagedRulesAmazonIpReputationList",
-                            SampledRequestsEnabled = true
-                        },
+                            CustomResponse = new CustomResponseProperty { ResponseCode = 429 }
+                        }
                     },
-
-                    new RuleProperty
+                    Statement = new StatementProperty
                     {
-                        Name = "AWS-AWSManagedRulesAnonymousIpList",
-                        Priority = 5,
-                        OverrideAction = new OverrideActionProperty
+                        RateBasedStatement = new RateBasedStatementProperty
                         {
-                            None = new Dictionary<string, object> { }
-                        },
-                        Statement = new StatementProperty
-                        {
-                            ManagedRuleGroupStatement = new ManagedRuleGroupStatementProperty
-                            {
-                                VendorName = "AWS",
-                                Name = "AWSManagedRulesAnonymousIpList"
-                            }
-                        },
-                        VisibilityConfig = new VisibilityConfigProperty
-                        {
-                            CloudWatchMetricsEnabled = true,
-                            MetricName = "AWS-AWSManagedRulesAnonymousIpList",
-                            SampledRequestsEnabled = true
-                        },
+                            Limit = RateLimit,
+                            EvaluationWindowSec = RateLimitWindowSeconds,
+                            AggregateKeyType = "IP"
+                        }
                     },
-
-                    new RuleProperty
+                    VisibilityConfig = new VisibilityConfigProperty
                     {
-                        // Evaluated before the allow rule, because Allow ends evaluation.
-                        Name = "GeoLocationAPI-RateLimit",
-                        Priority = 6,
-                        Action = new RuleActionProperty
-                        {
-                            Block = new BlockActionProperty
-                            {
-                                CustomResponse = new CustomResponseProperty { ResponseCode = 429 }
-                            }
-                        },
-                        Statement = new StatementProperty
-                        {
-                            RateBasedStatement = new RateBasedStatementProperty
-                            {
-                                Limit = RateLimit,
-                                EvaluationWindowSec = RateLimitWindowSeconds,
-                                AggregateKeyType = "IP"
-                            }
-                        },
-                        VisibilityConfig = new VisibilityConfigProperty
-                        {
-                            CloudWatchMetricsEnabled = true,
-                            MetricName = "GeoLocationAPI-RateLimit",
-                            SampledRequestsEnabled = true
-                        },
+                        CloudWatchMetricsEnabled = true,
+                        MetricName = "GeoLocationAPI-RateLimit",
+                        SampledRequestsEnabled = true
                     },
-                    new RuleProperty
+                },
+                new RuleProperty
+                {
+                    Name = "GeoLocationAPI-Regex-Rule",
+                    Priority = 7,
+                    Action = new RuleActionProperty
                     {
-                        Name = "GeoLocationAPI-Regex-Rule",
-                        Priority = 7,
-                        Action = new RuleActionProperty
+                        Allow = new AllowActionProperty()
+                    },
+                    Statement = new StatementProperty
+                    {
+                        OrStatement = new OrStatementProperty
                         {
-                            Allow = new AllowActionProperty()
-                        },
-                        Statement = new StatementProperty
-                        {
-                            OrStatement = new OrStatementProperty
+                            Statements = new []
                             {
-                                Statements = new []
-                                {
-                                    new StatementProperty {
-                                        RegexMatchStatement = new RegexMatchStatementProperty
+                                new StatementProperty {
+                                    RegexMatchStatement = new RegexMatchStatementProperty
+                                    {
+                                        // Anchored so only the health check path matches, not any path that happens to contain /hc.
+                                        RegexString = "(?i)^/hc/?\\z",
+                                        FieldToMatch = new FieldToMatchProperty
                                         {
-                                            // Anchored so only the health check path matches, not any path that happens to contain /hc.
-                                            RegexString = "(?i)^/hc/?\\z",
-                                            FieldToMatch = new FieldToMatchProperty
-                                            {
-                                                UriPath = new Dictionary<string, object> { }
-                                            },
-                                            TextTransformations = new [] { new TextTransformationProperty {
-                                                Priority = 0,
-                                                Type = "NONE" }
-                                            }
+                                            UriPath = new Dictionary<string, object> { }
                                         },
-                                    },
-                                    new StatementProperty {
-                                        RegexMatchStatement = new RegexMatchStatementProperty
-                                        {
-                                            // AWS WAF supports the pattern syntax used by the PCRE library libpcre.
-                                            // Matches /api/v1/geolocation, /api/v1/geolocation/ and /api/v1/geolocation/{ip}, and nothing else.
-                                            RegexString = "(?i)^/api/v[0-9]+/geolocation(/[^/]*)?\\z",
-                                            FieldToMatch = new FieldToMatchProperty
-                                            {
-                                                UriPath = new Dictionary<string, object> { }
-                                            },
-                                            TextTransformations = new [] { new TextTransformationProperty {
-                                                Priority = 0,
-                                                Type = "NONE"
-                                            }}
+                                        TextTransformations = new [] { new TextTransformationProperty {
+                                            Priority = 0,
+                                            Type = "NONE" }
                                         }
+                                    },
+                                },
+                                new StatementProperty {
+                                    RegexMatchStatement = new RegexMatchStatementProperty
+                                    {
+                                        // AWS WAF supports the pattern syntax used by the PCRE library libpcre.
+                                        // Matches /api/v1/geolocation, /api/v1/geolocation/ and /api/v1/geolocation/{ip}, and nothing else.
+                                        RegexString = "(?i)^/api/v[0-9]+/geolocation(/[^/]*)?\\z",
+                                        FieldToMatch = new FieldToMatchProperty
+                                        {
+                                            UriPath = new Dictionary<string, object> { }
+                                        },
+                                        TextTransformations = new [] { new TextTransformationProperty {
+                                            Priority = 0,
+                                            Type = "NONE"
+                                        }}
                                     }
                                 }
                             }
-                        },
-                        VisibilityConfig = new VisibilityConfigProperty
-                        {
-                            CloudWatchMetricsEnabled = true,
-                            MetricName = "GeoLocationAPI-Regex-Rule",
-                            SampledRequestsEnabled = true
-                        },
-                    }
-                }
-            });
-
-            // Create the WebACL LogGroup
-            LogGroup geoLocationWebACLLogGroup = new LogGroup(this, "GeoLocationWebACLLogGroup", new LogGroupProps
-            {
-                //Check the AWS WAF Documentation
-                //Log group names must start with aws-waf-logs-
-                LogGroupName = "aws-waf-logs-geolocationapi",
-                Retention = RetentionDays.SIX_MONTHS,
-                RemovalPolicy = RemovalPolicy.DESTROY
-            });
-
-            // AWS WAF WAF has particular requirements to the naming and format of Logging Destination configs as described and shown in their docs.
-            // Specifically, the ARN of the Log Group cannot end in :* which unfortunately is the return value for a Log Group ARN in Cloudformation.
-            // Configuring the WebACL Log configuration and formatting the ARN
-            CfnLoggingConfiguration geoLocationAPIWebACLLoggingConfiguration = new CfnLoggingConfiguration(this, "GeoLocationAPIWebACLLoggingConfiguration", new CfnLoggingConfigurationProps
-            {
-                LogDestinationConfigs = new[] {
-                    Stack.Of(this).FormatArn(new ArnComponents
+                        }
+                    },
+                    VisibilityConfig = new VisibilityConfigProperty
                     {
-                        ArnFormat = ArnFormat.COLON_RESOURCE_NAME,
-                        Service = "logs",
-                        Resource = "log-group",
-                        ResourceName = geoLocationWebACLLogGroup.LogGroupName
-                    })},
-                ResourceArn = geoLocationAPIWAFWebACL.AttrArn,
-            });
+                        CloudWatchMetricsEnabled = true,
+                        MetricName = "GeoLocationAPI-Regex-Rule",
+                        SampledRequestsEnabled = true
+                    },
+                }
+            }
+        });
 
-            // Associate the WebAcl to ALB
-            CfnWebACLAssociation geoLocationAPIWebACLAssocation = new CfnWebACLAssociation(this, "GeoLocationAPIWebACLAssocation", new CfnWebACLAssociationProps
-            {
-                ResourceArn = props.ALBResourceArn,
-                WebAclArn = geoLocationAPIWAFWebACL.AttrArn
-            });
-        }
+        // Create the WebACL LogGroup
+        LogGroup geoLocationWebACLLogGroup = new LogGroup(this, "GeoLocationWebACLLogGroup", new LogGroupProps
+        {
+            //Check the AWS WAF Documentation
+            //Log group names must start with aws-waf-logs-
+            LogGroupName = "aws-waf-logs-geolocationapi",
+            Retention = RetentionDays.SIX_MONTHS,
+            RemovalPolicy = RemovalPolicy.DESTROY
+        });
+
+        // AWS WAF WAF has particular requirements to the naming and format of Logging Destination configs as described and shown in their docs.
+        // Specifically, the ARN of the Log Group cannot end in :* which unfortunately is the return value for a Log Group ARN in Cloudformation.
+        // Configuring the WebACL Log configuration and formatting the ARN
+        CfnLoggingConfiguration geoLocationAPIWebACLLoggingConfiguration = new CfnLoggingConfiguration(this, "GeoLocationAPIWebACLLoggingConfiguration", new CfnLoggingConfigurationProps
+        {
+            LogDestinationConfigs = new[] {
+                Stack.Of(this).FormatArn(new ArnComponents
+                {
+                    ArnFormat = ArnFormat.COLON_RESOURCE_NAME,
+                    Service = "logs",
+                    Resource = "log-group",
+                    ResourceName = geoLocationWebACLLogGroup.LogGroupName
+                })},
+            ResourceArn = geoLocationAPIWAFWebACL.AttrArn,
+        });
+
+        // Associate the WebAcl to ALB
+        CfnWebACLAssociation geoLocationAPIWebACLAssocation = new CfnWebACLAssociation(this, "GeoLocationAPIWebACLAssocation", new CfnWebACLAssociationProps
+        {
+            ResourceArn = props.ALBResourceArn,
+            WebAclArn = geoLocationAPIWAFWebACL.AttrArn
+        });
     }
 }

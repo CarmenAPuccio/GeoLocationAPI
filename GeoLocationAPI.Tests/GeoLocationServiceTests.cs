@@ -8,13 +8,20 @@ namespace GeoLocationAPI.Tests;
 
 public sealed class GeoLocationServiceTests : IDisposable
 {
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private static readonly DateTimeOffset Now = new(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+
     private readonly Instrumentation _instrumentation = new();
     private readonly GeoLocationService _service;
 
     public GeoLocationServiceTests()
     {
         var settings = Options.Create(new DbSettings { GeoLite2CityDB = Path.Join(AppContext.BaseDirectory, "GeoLite2-City.mmdb") });
-        _service = new GeoLocationService(settings, _instrumentation);
+        _service = new GeoLocationService(settings, _instrumentation, new FixedTimeProvider(Now));
     }
 
     public void Dispose()
@@ -35,6 +42,14 @@ public sealed class GeoLocationServiceTests : IDisposable
     }
 
     [Fact]
+    public void Date_ComesFromTheTimeProvider()
+    {
+        var location = _service.GetGeoLocation(IPAddress.Parse("8.8.8.8"));
+
+        Assert.Equal(Now.UtcDateTime, location.Date);
+    }
+
+    [Fact]
     public void NullAddress_IsRejected()
     {
         Assert.Throws<ArgumentNullException>(() => _service.GetGeoLocation(null!));
@@ -43,7 +58,7 @@ public sealed class GeoLocationServiceTests : IDisposable
     [Fact]
     public void NullOptions_AreRejected()
     {
-        Assert.Throws<ArgumentNullException>(() => new GeoLocationService(null!, _instrumentation));
-        Assert.Throws<ArgumentNullException>(() => new GeoLocationService(Options.Create(new DbSettings()), null!));
+        Assert.Throws<ArgumentNullException>(() => new GeoLocationService(null!, _instrumentation, TimeProvider.System));
+        Assert.Throws<ArgumentNullException>(() => new GeoLocationService(Options.Create(new DbSettings()), null!, TimeProvider.System));
     }
 }

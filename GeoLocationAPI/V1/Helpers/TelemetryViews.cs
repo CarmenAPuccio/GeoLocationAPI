@@ -9,9 +9,10 @@ namespace GeoLocationAPI.V1.Helpers;
 /// </summary>
 public static class TelemetryViews
 {
-    // The request metrics are the "RED" signals (rate, errors, duration). Route and status code are enough to
-    // see which endpoint is failing. Scheme and protocol version only multiply the number of metrics.
-    private static readonly string[] RequestTags = ["http.request.method", "http.route", "http.response.status_code"];
+    // The request metrics are the "RED" signals (rate, errors, duration). Route and status code show which endpoint
+    // is failing, and error.type (set only when an exception occurred) says why. Scheme and protocol version only
+    // multiply the number of metrics.
+    private static readonly string[] RequestTags = ["http.request.method", "http.route", "http.response.status_code", "error.type"];
 
     private const int RequestCardinalityLimit = 100;
 

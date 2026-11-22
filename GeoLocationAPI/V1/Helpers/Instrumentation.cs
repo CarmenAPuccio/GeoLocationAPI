@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Reflection;
 
 namespace GeoLocationAPI.V1.Helpers;
 
@@ -10,18 +11,21 @@ namespace GeoLocationAPI.V1.Helpers;
 public sealed class Instrumentation : IDisposable
 {
     internal const string ActivitySourceName = "GeoLocationAPI";
+    internal const string MeterName = "GeoLocationAPI";
 
     /// <summary>
-    /// The assembly version. A loaded assembly always has one.
+    /// The product version, plus the commit when the build knows it (for example "1.0.0+3f9a2c1"). A loaded assembly
+    /// always has this attribute.
     /// </summary>
-    internal static readonly string Version = typeof(Instrumentation).Assembly.GetName().Version!.ToString();
+    internal static readonly string Version = typeof(Instrumentation).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
 
     private readonly Meter _meter;
 
     public Instrumentation()
     {
         ActivitySource = new ActivitySource(ActivitySourceName, Version);
-        _meter = new Meter(ActivitySourceName, Version);
+        _meter = new Meter(MeterName, Version);
         LookupCounter = _meter.CreateCounter<long>(
             "geolocation.lookups",
             unit: "{lookup}",

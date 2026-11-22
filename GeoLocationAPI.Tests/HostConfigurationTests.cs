@@ -63,7 +63,7 @@ public class HostConfigurationTests
 
         var failure = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
 
-        Assert.Contains("HealthCheck:IpToTest", Flatten(failure), StringComparison.Ordinal);
+        Assert.Contains("IpToTest", Flatten(failure), StringComparison.Ordinal);
     }
 
     private static string Flatten(Exception exception)

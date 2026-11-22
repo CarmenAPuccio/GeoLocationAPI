@@ -180,6 +180,53 @@ public sealed class StackTests
         Assert.Equal(Path.Join(_stack.RepositoryRoot, "aws-otel-collector"), collector.GetProperty("directory").GetString());
     }
 
+    private static JsonElement ApiImageSource(string sourceRevision, string root, string outputDirectory)
+    {
+        var app = new Amazon.CDK.App(new Amazon.CDK.AppProps
+        {
+            Outdir = outputDirectory,
+            Context = new Dictionary<string, object> { ["aws:cdk:disable-asset-staging"] = true },
+        });
+        new CdkGeoLocationApiStack(app, "RevisionStack", new Amazon.CDK.StackProps(), root, sourceRevision);
+        var assets = JsonDocument.Parse(File.ReadAllText(Path.Join(app.Synth().Directory, "RevisionStack.assets.json"))).RootElement;
+
+        return assets.GetProperty("dockerImages").EnumerateObject().Select(i => i.Value.GetProperty("source")).Single(s => s.TryGetProperty("dockerFile", out _));
+    }
+
+    [Fact]
+    public void ApiImage_ReceivesTheSourceRevision_SoServiceVersionNamesTheCommit()
+    {
+        var output = Path.Join(Path.GetTempPath(), "cdk-geolocationapi-revision-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var api = ApiImageSource("3f9a2c1", _stack.RepositoryRoot, output);
+
+            Assert.Equal("3f9a2c1", api.GetProperty("dockerBuildArgs").GetProperty("SOURCE_REVISION_ID").GetString());
+        }
+        finally
+        {
+            Directory.Delete(output, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ApiImage_HasNoBuildArgsWithoutARevision()
+    {
+        var output = Path.Join(Path.GetTempPath(), "cdk-geolocationapi-norevision-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var api = ApiImageSource(string.Empty, _stack.RepositoryRoot, output);
+
+            var hasRevisionArg = api.TryGetProperty("dockerBuildArgs", out var args) && args.TryGetProperty("SOURCE_REVISION_ID", out _);
+
+            Assert.False(hasRevisionArg);
+        }
+        finally
+        {
+            Directory.Delete(output, recursive: true);
+        }
+    }
+
     [Fact]
     public void Stack_DefaultsRepositoryRootToTheParentDirectory()
     {

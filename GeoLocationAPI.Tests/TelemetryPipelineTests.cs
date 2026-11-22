@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using System.Diagnostics;
@@ -20,6 +21,8 @@ public class InMemoryTelemetryFactory : GeoLocationApiFactory
 
     public List<Metric> Metrics { get; } = [];
 
+    public List<LogRecord> Logs { get; } = [];
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         base.ConfigureWebHost(builder);
@@ -27,6 +30,7 @@ public class InMemoryTelemetryFactory : GeoLocationApiFactory
         {
             services.ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddInMemoryExporter(Activities));
             services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddInMemoryExporter(Metrics));
+            services.ConfigureOpenTelemetryLoggerProvider(logging => logging.AddInMemoryExporter(Logs));
         });
     }
 
@@ -34,6 +38,7 @@ public class InMemoryTelemetryFactory : GeoLocationApiFactory
     {
         Services.GetRequiredService<TracerProvider>().ForceFlush();
         Services.GetRequiredService<MeterProvider>().ForceFlush();
+        Services.GetRequiredService<LoggerProvider>().ForceFlush();
     }
 }
 
@@ -143,6 +148,25 @@ public sealed class TelemetryPipelineTests : IDisposable
         public GeoLocation GetGeoLocation(IPAddress ipAddress) => throw new InvalidOperationException("database unavailable");
     }
 
+    private sealed class UnhealthyFactory : InMemoryTelemetryFactory
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            // A private address is valid but not in the database, so the health check fails.
+            builder.UseSetting("HealthCheck:IpToTest", "10.0.0.1");
+        }
+    }
+
+    private sealed class NamedServiceFactory : InMemoryTelemetryFactory
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            builder.UseSetting("OTEL_SERVICE_NAME", "name-from-environment");
+        }
+    }
+
     private sealed class FailingLookupFactory : InMemoryTelemetryFactory
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -172,6 +196,67 @@ public sealed class TelemetryPipelineTests : IDisposable
     }
 
     [Fact]
+    public async Task UnhandledException_AddsErrorTypeToTheRequestMetric()
+    {
+        using var failing = new FailingLookupFactory();
+        var client = failing.CreateClient();
+
+        await client.GetAsync("/api/v1/geolocation/8.8.8.8");
+        failing.Flush();
+
+        var duration = failing.Metrics.Last(m => m.Name == "http.server.request.duration");
+        var errorTypes = new List<string>();
+        foreach (var point in duration.GetMetricPoints())
+        {
+            foreach (var tag in point.Tags)
+            {
+                if (tag.Key == "error.type")
+                {
+                    errorTypes.Add(tag.Value?.ToString() ?? string.Empty);
+                }
+            }
+        }
+
+        Assert.Contains("System.InvalidOperationException", errorTypes);
+    }
+
+    [Fact]
+    public void RuntimeMetrics_ComeFromTheBuiltInMeter()
+    {
+        _factory.Flush();
+
+        var names = _factory.Metrics.Select(m => m.Name).Where(n => n.StartsWith("dotnet.", StringComparison.Ordinal)).ToList();
+
+        Assert.Contains("dotnet.gc.collections", names);
+        Assert.Contains("dotnet.process.memory.working_set", names);
+    }
+
+    [Fact]
+    public async Task LogRecords_IncludeTheFormattedMessage()
+    {
+        using var unhealthy = new UnhealthyFactory();
+        var client = unhealthy.CreateClient();
+
+        var response = await client.GetAsync("/hc");
+        unhealthy.Flush();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var record = Assert.Single(unhealthy.Logs, l => l.CategoryName == "GeoLocationAPI.V1.HealthChecks.GeoLocationHealthCheck");
+        Assert.Equal("Health check failed: 10.0.0.1 was not found in the GeoDB", record.FormattedMessage);
+        Assert.Equal(LogLevel.Warning, record.LogLevel);
+    }
+
+    [Fact]
+    public void ServiceName_ComesFromTheEnvironmentWhenSet()
+    {
+        using var named = new NamedServiceFactory();
+
+        var attributes = named.Services.GetRequiredService<TracerProvider>().GetResource().Attributes.ToDictionary(a => a.Key, a => a.Value);
+
+        Assert.Equal("name-from-environment", attributes["service.name"]);
+    }
+
+    [Fact]
     public void Resource_DescribesTheServiceAndItsEnvironment()
     {
         var attributes = _factory.Services.GetRequiredService<TracerProvider>().GetResource().Attributes.ToDictionary(a => a.Key, a => a.Value);
@@ -179,7 +264,8 @@ public sealed class TelemetryPipelineTests : IDisposable
         Assert.Equal("GeoLocationAPI", attributes["service.name"]);
         Assert.Equal("GeoLocation", attributes["service.namespace"]);
         Assert.Equal("Development", attributes["deployment.environment.name"]);
-        Assert.False(string.IsNullOrWhiteSpace(attributes["service.version"].ToString()));
+        // The informational version ("1.0.0", plus "+<commit>" when built from git), not the four-part assembly version.
+        Assert.Matches(@"^\d+\.\d+\.\d+(\+[0-9a-f]+)?$", attributes["service.version"].ToString());
         // One per process, so telemetry from the two tasks can be told apart.
         Assert.True(Guid.TryParse(attributes["service.instance.id"].ToString(), out _));
     }

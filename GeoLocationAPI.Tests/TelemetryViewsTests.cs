@@ -11,12 +11,12 @@ public sealed class TelemetryViewsTests : IDisposable
     public void Dispose() => _meter.Dispose();
 
     [Fact]
-    public void RequestDuration_KeepsOnlyMethodRouteAndStatus()
+    public void RequestDuration_KeepsOnlyMethodRouteStatusAndErrorType()
     {
         var view = TelemetryViews.Configure(_meter.CreateHistogram<double>("http.server.request.duration"));
 
         Assert.NotNull(view);
-        Assert.Equal(["http.request.method", "http.route", "http.response.status_code"], view.TagKeys!);
+        Assert.Equal(["http.request.method", "http.route", "http.response.status_code", "error.type"], view.TagKeys!);
     }
 
     [Fact]

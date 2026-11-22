@@ -16,9 +16,9 @@ Internet -> WAF -> Application Load Balancer (HTTP :80)
 
 - **Network.** A VPC (`172.25.0.0/16`) with two availability zones, public and private subnets, and one NAT gateway per zone. The tasks run in the private subnets with no public IP. The load balancer is internet-facing.
 - **Cluster.** An ECS cluster with Container Insights enabled.
-- **Task.** One Fargate task definition on ARM64 with 0.5 vCPU and 1 GiB, running two containers. The API container gets 512 MiB and the collector 512 MiB. The API starts after the collector, and the collector is essential. The API has a container health check on `/hc`.
+- **Task.** One Fargate task definition on ARM64 with 0.5 vCPU and 1 GiB, running two containers. The API container gets 512 MiB and the collector 512 MiB. The collector accepts OTLP only (gRPC on 4317, HTTP on 4318) and starts every pipeline with a memory limiter, so it sheds data instead of being killed when it nears its limit. The API starts after the collector, and the collector is essential. The API has a container health check on `/hc`.
 - **Service.** Two tasks, a rolling deployment (up to 200%, at least 100% healthy) and a deployment circuit breaker that rolls back if new tasks keep failing. The load balancer health check is `/hc`, and targets drain for 10 seconds.
-- **Images.** CDK builds both images when you deploy and pushes them to the bootstrap ECR repository. The task definition references them by a hash of their contents, so a change to the code or the collector configuration creates a new task definition revision. The API image is built from the repository root with `GeoLocationAPI/Dockerfile`, because the shared build files live there. The collector image is built from `aws-otel-collector/`.
+- **Images.** CDK builds both images when you deploy and pushes them to the bootstrap ECR repository. The task definition references them by a hash of their contents, so a change to the code, the collector configuration or the commit creates a new task definition revision. The API image is built from the repository root with `GeoLocationAPI/Dockerfile`, because the shared build files live there. The collector image is built from `aws-otel-collector/`. When `SOURCE_REVISION_ID` is set, it is passed to the API image build as a build argument.
 - **Permissions.** The task role has only what the collector needs: the X-Ray write and sampling actions (X-Ray does not support resource-level permissions for them) and CloudWatch Logs actions limited to the `/geolocationapi/otel/*` log groups. Pulling images and writing container logs use the task execution role that CDK creates.
 - **Log groups,** all with six months of retention and deleted with the stack:
 
@@ -58,6 +58,7 @@ Run these from this directory (`CdkGeoLocationApi`). The app builds the images f
 | `cdk synth` | Emit the CloudFormation template (needs no AWS credentials) |
 | `cdk diff` | Compare the deployed stack with the current code |
 | `CDK_DOCKER=finch cdk deploy` | Build the images with Finch and deploy |
+| `SOURCE_REVISION_ID=$(git rev-parse --short HEAD) CDK_DOCKER=finch cdk deploy` | The same, recording the commit in the API's `service.version` (for example `1.0.0+3f9a2c1`). Without it the version is `1.0.0`. |
 | `cdk destroy` | Delete the stack |
 
 The stack output `GeoLocationAPILoadBalancerURL` is the URL of the API, for example `http://<load-balancer>/api/v1/geolocation`.
