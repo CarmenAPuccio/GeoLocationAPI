@@ -1,0 +1,5 @@
+root = true
+
+[*.cs]
+# One namespace style everywhere. IDE0161 fails the build because warnings are errors.
+csharp_style_namespace_declarations = file_scoped:warning

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using OpenTelemetry;
+using OpenTelemetry.Context.Propagation;
 using OpenTelemetry.Extensions.AWS.Trace;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
@@ -17,13 +18,9 @@ using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
 using System.Net;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 
 
-// This is required if the collector doesn't expose an https endpoint as .NET by default
-// only allow http2 (required for gRPC) to secure endpoints
-AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -67,14 +64,17 @@ builder.Services.AddApiVersioning(options =>
 
 builder.Services.AddSingleton<Instrumentation>();
 
-// Traces, metrics and logs are exported over OTLP. The endpoint, protocol and service name come from the
-// standard OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_PROTOCOL and OTEL_SERVICE_NAME environment variables.
-// With none set, the SDK exports gRPC to http://localhost:4317 as "GeoLocationAPI".
+// Traces, metrics and logs are exported over OTLP. The endpoint and protocol come from the standard
+// OTEL_EXPORTER_OTLP_ENDPOINT and OTEL_EXPORTER_OTLP_PROTOCOL variables. With none set, the SDK exports gRPC to
+// http://localhost:4317, which is the collector sidecar.
+//
+// A service name set in code wins over OTEL_SERVICE_NAME, so the variable is read here and passed on.
+var serviceName = builder.Configuration["OTEL_SERVICE_NAME"] ?? "GeoLocationAPI";
 var openTelemetry = builder.Services.AddOpenTelemetry()
     // Attributes that are the same for the life of the process belong on the resource, not on every span.
     .ConfigureResource(resource => resource
         .AddService(
-            serviceName: "GeoLocationAPI",
+            serviceName: serviceName,
             serviceNamespace: "GeoLocation",
             serviceVersion: Instrumentation.Version)
         .AddAttributes([new KeyValuePair<string, object>("deployment.environment.name", builder.Environment.EnvironmentName)]))
@@ -94,10 +94,13 @@ var openTelemetry = builder.Services.AddOpenTelemetry()
         .AddSource(Instrumentation.ActivitySourceName))
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
-        .AddRuntimeInstrumentation()
-        .AddMeter(Instrumentation.ActivitySourceName)
+        // Runtime metrics are built in to .NET 9 and later, so no instrumentation package is needed.
+        .AddMeter("System.Runtime")
+        .AddMeter(Instrumentation.MeterName)
         .AddView(TelemetryViews.Configure))
-    .WithLogging()
+    // The log body is the message template ("{IpAddress} was not found") with the values as attributes.
+    // The formatted message is added as well, so a log line reads naturally in CloudWatch Logs.
+    .WithLogging(configureBuilder: null, configureOptions: options => options.IncludeFormattedMessage = true)
     .UseOtlpExporter();
 
 if (builder.Environment.IsDevelopment())
@@ -111,7 +114,14 @@ else
     builder.Logging.AddFilter<Microsoft.Extensions.Logging.Console.ConsoleLoggerProvider>(null, LogLevel.Warning);
 }
 
-Sdk.SetDefaultTextMapPropagator(new AWSXRayPropagator());
+// W3C trace context and baggage for callers that send them, and the X-Amzn-Trace-Id header the load balancer
+// adds. The first valid trace context wins, so a caller's traceparent is used before the load balancer's header.
+Sdk.SetDefaultTextMapPropagator(new CompositeTextMapPropagator(
+[
+    new TraceContextPropagator(),
+    new BaggagePropagator(),
+    new AWSXRayPropagator(),
+]));
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ExceptionTraceHandler>();
@@ -130,16 +140,14 @@ builder.Services.AddOptions<ProxyInformation>()
 
 builder.Services.AddSingleton<IGeoLocationService, GeoLocationService>();
 
-var healthCheckIp = Required("HealthCheck:IpToTest");
-if (!IPAddress.TryParse(healthCheckIp, out _))
-{
-    throw new InvalidOperationException("HealthCheck:IpToTest is not a valid IP address.");
-}
+builder.Services.AddOptions<HealthCheckSettings>()
+    .BindConfiguration(HealthCheckSettings.SectionName)
+    .ValidateDataAnnotations()
+    .Validate(o => IPAddress.TryParse(o.IpToTest, out _), "HealthCheck:IpToTest is not a valid IP address.")
+    .ValidateOnStart();
 
-builder.Services.AddHealthChecks()
-    .AddTypeActivatedCheck<GeoLocationHealthCheck>(
-        "GeoLocationHealthCheck",
-        args: new object[] { healthCheckIp });
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHealthChecks().AddCheck<GeoLocationHealthCheck>("GeoLocationHealthCheck");
 
 builder.Services.AddOptions<ForwardedHeadersOptions>()
     .Configure<IOptions<ProxyInformation>>((options, proxy) =>
@@ -167,66 +175,48 @@ if (app.Environment.IsDevelopment())
 
 app.UseForwardedHeaders();
 
-app.UseAuthorization();
-
 app.MapControllers();
 
-app.MapHealthChecks("/hc", new HealthCheckOptions
+app.MapHealthChecks(TelemetryViews.HealthCheckPath, new HealthCheckOptions
 {
     ResponseWriter = WriteResponse
 });
 
 app.Run();
 
-string Required(string key) =>
-    builder.Configuration[key] ?? throw new InvalidOperationException($"Required configuration value '{key}' is missing.");
-
-Task WriteResponse(HttpContext context, HealthReport healthReport)
+static async Task WriteResponse(HttpContext context, HealthReport healthReport)
 {
     context.Response.ContentType = "application/json; charset=utf-8";
 
-    var options = new JsonWriterOptions { Indented = true };
+    await using var jsonWriter = new Utf8JsonWriter(context.Response.BodyWriter, new JsonWriterOptions { Indented = true });
 
-    using var memoryStream = new MemoryStream();
-    using (var jsonWriter = new Utf8JsonWriter(memoryStream, options))
+    jsonWriter.WriteStartObject();
+    jsonWriter.WriteString("Status", healthReport.Status.ToString());
+    jsonWriter.WriteString("Duration", healthReport.TotalDuration.ToString());
+    jsonWriter.WriteString("FrameworkDescription", RuntimeInformation.FrameworkDescription);
+    jsonWriter.WriteString("ProcessArchitecture", RuntimeInformation.ProcessArchitecture.ToString());
+    jsonWriter.WriteStartObject("Results");
+
+    foreach (var healthReportEntry in healthReport.Entries)
     {
-        jsonWriter.WriteStartObject();
-        jsonWriter.WriteString("Status", healthReport.Status.ToString());
-        jsonWriter.WriteString("Duration", healthReport.TotalDuration.ToString());
-        jsonWriter.WriteString("FrameworkDescription", RuntimeInformation.FrameworkDescription);
-        jsonWriter.WriteString("ProcessArchitecture", RuntimeInformation.ProcessArchitecture.ToString());
-        jsonWriter.WriteStartObject("Results");
+        jsonWriter.WriteStartObject(healthReportEntry.Key);
+        jsonWriter.WriteString("Status", healthReportEntry.Value.Status.ToString());
+        jsonWriter.WriteString("Description", healthReportEntry.Value.Description);
+        jsonWriter.WriteStartObject("Data");
 
-        foreach (var healthReportEntry in healthReport.Entries)
+        foreach (var item in healthReportEntry.Value.Data)
         {
-            jsonWriter.WriteStartObject(healthReportEntry.Key);
-            jsonWriter.WriteString("Status",
-                healthReportEntry.Value.Status.ToString());
-            jsonWriter.WriteString("Description",
-                healthReportEntry.Value.Description);
-            jsonWriter.WriteStartObject("Data");
-
-            foreach (var item in healthReportEntry.Value.Data)
-            {
-                jsonWriter.WritePropertyName(item.Key);
-
-                JsonSerializer.Serialize(jsonWriter, item.Value,
-                    item.Value?.GetType() ?? typeof(object));
-            }
-
-            jsonWriter.WriteEndObject();
-            jsonWriter.WriteEndObject();
+            jsonWriter.WritePropertyName(item.Key);
+            JsonSerializer.Serialize(jsonWriter, item.Value, item.Value?.GetType() ?? typeof(object));
         }
 
         jsonWriter.WriteEndObject();
         jsonWriter.WriteEndObject();
     }
 
-    return context.Response.WriteAsync(
-        Encoding.UTF8.GetString(memoryStream.ToArray()));
+    jsonWriter.WriteEndObject();
+    jsonWriter.WriteEndObject();
 }
-
-
 
 // Makes the entry point visible to WebApplicationFactory in the test project.
 public partial class Program { }

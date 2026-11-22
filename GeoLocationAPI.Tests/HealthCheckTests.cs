@@ -1,8 +1,10 @@
+using GeoLocationAPI.Configuration;
 using GeoLocationAPI.V1.HealthChecks;
 using GeoLocationAPI.V1.Models;
 using GeoLocationAPI.V1.Services;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Net;
 
 namespace GeoLocationAPI.Tests;
@@ -26,6 +28,8 @@ public class HealthCheckTests
             Entries.Add((logLevel, formatter(state, exception), exception));
     }
 
+    private static IOptions<HealthCheckSettings> Settings(string ip) => Options.Create(new HealthCheckSettings { IpToTest = ip });
+
     private static HealthCheckContext Context() => new()
     {
         Registration = new HealthCheckRegistration("test", _ => null!, HealthStatus.Unhealthy, null),
@@ -38,7 +42,7 @@ public class HealthCheckTests
         var check = new GeoLocationHealthCheck(
             new StubService(ip => new GeoLocation(ip.ToString()) { IPFoundInGeoDB = true, Message = "found" }),
             logger,
-            "8.8.8.8");
+            Settings("8.8.8.8"));
 
         var result = await check.CheckHealthAsync(Context());
 
@@ -54,7 +58,7 @@ public class HealthCheckTests
         var check = new GeoLocationHealthCheck(
             new StubService(ip => new GeoLocation(ip.ToString()) { IPFoundInGeoDB = false, Message = "missing" }),
             logger,
-            "10.0.0.1");
+            Settings("10.0.0.1"));
 
         var result = await check.CheckHealthAsync(Context());
 
@@ -68,25 +72,19 @@ public class HealthCheckTests
     }
 
     [Fact]
-    public async Task Unhealthy_WhenLookupThrows()
+    public async Task LookupFailure_IsNotCaught_SoTheHealthCheckServiceCanReportItUnhealthy()
     {
         var failure = new InvalidOperationException("database unavailable");
-        var logger = new ListLogger();
-        var check = new GeoLocationHealthCheck(new StubService(_ => throw failure), logger, "8.8.8.8");
+        var check = new GeoLocationHealthCheck(new StubService(_ => throw failure), new ListLogger(), Settings("8.8.8.8"));
 
-        var result = await check.CheckHealthAsync(Context());
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => check.CheckHealthAsync(Context()));
 
-        Assert.Equal(HealthStatus.Unhealthy, result.Status);
-        Assert.Same(failure, result.Exception);
-
-        var entry = Assert.Single(logger.Entries);
-        Assert.Equal(LogLevel.Error, entry.Level);
-        Assert.Same(failure, entry.Exception);
+        Assert.Same(failure, thrown);
     }
 
     [Fact]
     public void Constructor_RejectsInvalidAddress()
     {
-        Assert.Throws<FormatException>(() => new GeoLocationHealthCheck(new StubService(_ => null!), new ListLogger(), "nope"));
+        Assert.Throws<FormatException>(() => new GeoLocationHealthCheck(new StubService(_ => null!), new ListLogger(), Settings("nope")));
     }
 }

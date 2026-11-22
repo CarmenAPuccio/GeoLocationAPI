@@ -64,6 +64,28 @@ public sealed class TelemetryTests : IClassFixture<GeoLocationApiFactory>
     }
 
     [Fact]
+    public async Task IncomingTraceparentHeader_ContinuesTheTrace()
+    {
+        var span = await LookupSpan(request => request.Headers.Add(
+            "traceparent", "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"));
+
+        Assert.Equal("0af7651916cd43dd8448eb211c80319c", span.TraceId.ToHexString());
+    }
+
+    [Fact]
+    public async Task WhenBothHeadersArrive_TheCallersTraceparentWins()
+    {
+        // The load balancer adds X-Amzn-Trace-Id to every request, including ones that already carry traceparent.
+        var span = await LookupSpan(request =>
+        {
+            request.Headers.Add("traceparent", "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01");
+            request.Headers.Add("X-Amzn-Trace-Id", "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=1");
+        });
+
+        Assert.Equal("0af7651916cd43dd8448eb211c80319c", span.TraceId.ToHexString());
+    }
+
+    [Fact]
     public async Task NewTraces_UseXRayCompatibleIds()
     {
         // X-Ray rejects trace IDs whose first 8 hex digits (the epoch time in seconds) are not recent.
@@ -89,12 +111,9 @@ public sealed class TelemetryTests : IClassFixture<GeoLocationApiFactory>
         };
         listener.SetMeasurementEventCallback<long>((_, value, tags, _) =>
         {
-            foreach (var tag in tags)
+            foreach (var tag in tags.ToArray().Where(t => t.Key == "geolocation.found"))
             {
-                if (tag.Key == "geolocation.found")
-                {
-                    measurements.Add((value, tag.Value));
-                }
+                measurements.Add((value, tag.Value));
             }
         });
         listener.Start();

@@ -110,19 +110,19 @@ Settings come from the `appsettings*.json` files and can be overridden with envi
 | `ProxyInformation:ProxyKnownNetwork` and `ProxyKnownNetworkCIDR` | The network of the load balancer whose forwarded headers are trusted. It must match the VPC CIDR in the CDK app. |
 | `HealthCheck:IpToTest` | The address the `/hc` health check looks up. |
 
-Telemetry is configured with the standard OpenTelemetry environment variables, for example `OTEL_EXPORTER_OTLP_ENDPOINT` (default `http://localhost:4317`, which is the collector sidecar on ECS and Kubernetes) and `OTEL_SERVICE_NAME` (default `GeoLocationAPI`).
+Telemetry is configured with the standard OpenTelemetry environment variables: `OTEL_EXPORTER_OTLP_ENDPOINT` (default `http://localhost:4317`, which is the collector sidecar on ECS and Kubernetes), `OTEL_EXPORTER_OTLP_PROTOCOL` and `OTEL_SERVICE_NAME` (default `GeoLocationAPI`).
 
 ## Telemetry
 
-Everything is exported over OTLP to the collector, which forwards it to AWS. The setup follows the [OpenTelemetry .NET](https://opentelemetry.io/docs/languages/dotnet/) guidance: one SDK configuration through the host (`AddOpenTelemetry()` with `UseOtlpExporter()`), instrumentation libraries instead of hand-made spans where they exist, one shared `ActivitySource` and `Meter`, structured source-generated logging, and static attributes on the resource.
+Traces, metrics and logs are exported over OTLP to the collector, which forwards them to AWS.
 
-- **Resource.** Every signal carries `service.name`, `service.namespace`, `service.version`, a per-process `service.instance.id` and `deployment.environment.name`. On ECS the collector adds the task, cluster and launch type.
-- **Traces.** One per API request from the ASP.NET Core instrumentation, with a `GetGeoLocation` span for the database lookup carrying `geolocation.found` (indexed in X-Ray as an annotation). Trace IDs use the X-Ray format, and the `X-Amzn-Trace-Id` header added by the load balancer is continued. The default sampler records every trace. To sample in production, set `OTEL_TRACES_SAMPLER=parentbased_traceidratio` and `OTEL_TRACES_SAMPLER_ARG=0.1` (10%).
-- **Errors.** A failed request span has an Error status, and an unhandled exception is recorded on it (type, message and stack trace) before the 500 problem details response is returned. The `/hc` health check is not traced, because the load balancer calls it every few seconds and the traces would crowd out real requests.
-- **Metrics.** Only an allowlist (`GeoLocationAPI/V1/Helpers/TelemetryViews.cs`) leaves the process: request duration by method, route and status code (capped at 100 series), active requests, the `geolocation.lookups` counter tagged with `geolocation.found`, and a few .NET runtime metrics (GC, CPU, memory, thread pool, exceptions). Anything else a library emits is dropped, so a library update cannot add billed metrics unnoticed. Metrics are sent as deltas (`OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE` in `appsettings.json`), because the collector's CloudWatch exporter drops the first interval of a cumulative series. Health check lookups are not counted in `geolocation.lookups`.
-- **Logs.** Structured and source-generated, with the trace and span ID. In Production only warnings and errors also go to the console, as a fallback if the collector is unavailable. In Development, traces are also printed to the console. The service does not log the addresses it looks up.
-- **Health check failures.** They are not traced. They show up as a warning or error log from the health check, as `http.server.request.duration` with `http.route=/hc` and a 503 status, and in the ALB and ECS health signals.
-- **Privacy.** The ASP.NET Core instrumentation records standard request attributes on the request span: the URL path (which contains the address being looked up) and the client address. Treat trace access and retention accordingly.
+- **Resource.** Every signal carries `service.name`, `service.namespace`, `service.version`, a per-process `service.instance.id` and `deployment.environment.name`. `service.version` is the product version plus the commit when known, for example `1.0.0+3f9a2c1`. Local builds read the commit from git. Container builds take `--build-arg SOURCE_REVISION_ID=$(git rev-parse --short HEAD)`, and CDK passes the `SOURCE_REVISION_ID` environment variable. On ECS the collector adds the task, cluster and launch type.
+- **Traces.** One per API request, with a `GetGeoLocation` span for the lookup carrying `geolocation.found` (an X-Ray annotation). Trace IDs use the X-Ray format. Incoming context is read from `traceparent` and from `X-Amzn-Trace-Id`, which the load balancer adds, and `traceparent` wins when both are present. Every trace is recorded by default. To sample, set `OTEL_TRACES_SAMPLER=parentbased_traceidratio` and `OTEL_TRACES_SAMPLER_ARG=0.1`.
+- **Errors.** A failed request span has an Error status. An unhandled exception (type, message and stack trace) is recorded on it before the 500 problem details response is returned.
+- **Health checks.** `/hc` is not traced, because the load balancer calls it every few seconds. A failing check shows up as a warning log from the health check, as `http.server.request.duration` with `http.route=/hc` and a 503 status, and in the ALB and ECS health signals. Its lookups are not counted in `geolocation.lookups`.
+- **Metrics.** Only an allowlist (`GeoLocationAPI/V1/Helpers/TelemetryViews.cs`) is exported: request duration by method, route and status code (plus `error.type` after an exception, capped at 100 series), active requests, `geolocation.lookups` tagged with `geolocation.found`, and a few .NET runtime metrics. Everything else is dropped. Metrics are sent as deltas (`OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE` in `appsettings.json`), because the collector's CloudWatch exporter drops the first interval of a cumulative series.
+- **Logs.** Structured, with the trace and span ID and the formatted message. Production writes only warnings and errors to the console, as a fallback if the collector is unavailable. Development also prints traces to the console. The service does not log the addresses it looks up.
+- **Privacy.** The request span carries the URL path, which contains the address being looked up, and the client address, as the ASP.NET Core instrumentation records them. Treat trace access and retention accordingly.
 
 ## Deploy
 
@@ -154,17 +154,13 @@ dotnet test GeoLocationAPI.sln      # everything
 ./scripts/coverage.sh               # everything, and fails unless line and branch coverage are 100%
 ```
 
-**API tests** (`GeoLocationAPI.Tests`) are xUnit integration tests. They start the whole API in memory with `WebApplicationFactory` (no ports, containers or network needed), call it over HTTP, and use the real GeoLite2 database. They cover:
-- successful lookups, IPv6, the caller's own address (including IPv4-mapped IPv6) and valid addresses that are not in the database
-- `X-Forwarded-For` honored from the load balancer network and ignored from anywhere else
-- invalid addresses and unknown routes returning problem details, and the IP parser on its own
-- the health check (healthy, address missing, lookup failing, its logging), API version headers, the OpenAPI document, and the Scalar page, which is absent in Production
-- the app refusing to start with a missing or invalid setting
-- telemetry: spans, the X-Ray trace ID format and header continuation, exceptions recorded on the request span, the resource attributes, the metric allowlist, tags and cardinality limit, delta temporality, the health check being neither traced nor counted, and the Production console log level
+**API tests** (`GeoLocationAPI.Tests`) are xUnit integration tests. They start the whole API in memory with `WebApplicationFactory` (no ports, containers or network needed) and use the real GeoLite2 database. They cover lookups (IPv4, IPv6, the caller's address, addresses not in the database), invalid input and error responses, forwarded headers, the health check, startup validation, OpenAPI and Scalar, and the telemetry described above.
 
-**CDK tests** (`CdkGeoLocationApi/test/CdkGeoLocationApi.Tests`) synthesize the stack and assert on the CloudFormation: task size and ARM64, the containers, the task role's permissions, log groups, the service and load balancer, the Docker build contexts and the WAF rules. They also check that the VPC CIDR matches the API's trusted proxy network and that the collector's log group names match the collector configuration.
+**CDK tests** (`CdkGeoLocationApi/test/CdkGeoLocationApi.Tests`) synthesize the stack and assert on the CloudFormation. See the [CDK README](CdkGeoLocationApi/README.md).
 
-Coverage excludes generated code, such as the OpenAPI XML comment support. Container runs (`finch compose up`) and deployments are not part of the automated tests.
+Coverage excludes generated code. Container runs and deployments are not part of the automated tests.
+
+**Code scanning.** CodeQL (`.github/workflows/codeql-analysis.yml`) analyzes the source without building it, so code that source generators write at compile time is not analyzed.
 
 ## Repository layout
 
@@ -177,4 +173,5 @@ Coverage excludes generated code, such as the OpenAPI XML comment support. Conta
 | `templates/` | Kubernetes manifest |
 | `compose.yaml`, `compose.development.yaml` | Local containers |
 | `scripts/coverage.sh` | Runs all tests and enforces 100% coverage |
+| `.github/` | CodeQL workflow and configuration |
 | `global.json`, `Directory.Build.props`, `Directory.Packages.props` | SDK version, shared build and analyzer settings (warnings are errors), and central NuGet package versions |

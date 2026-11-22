@@ -2,6 +2,7 @@
 # The build context is the repository root, because Directory.Build.props, Directory.Packages.props
 # and global.json live there. Build with:
 #   finch build -f GeoLocationAPI/Dockerfile -t geolocationapi .
+# To record the commit in service.version, add: --build-arg SOURCE_REVISION_ID=$(git rev-parse --short HEAD)
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
@@ -12,8 +13,12 @@ COPY GeoLocationAPI/GeoLocationAPI.csproj GeoLocationAPI/
 RUN dotnet restore GeoLocationAPI/GeoLocationAPI.csproj
 
 COPY GeoLocationAPI/ GeoLocationAPI/
+
+# The build context has no .git, so the commit is passed in. It becomes the "+<commit>" part of the version that is
+# reported as service.version. Leave it empty and the version is just "1.0.0".
+ARG SOURCE_REVISION_ID=
 RUN dotnet publish GeoLocationAPI/GeoLocationAPI.csproj \
-    -c Release -o /app/publish --no-restore -p:UseAppHost=false
+    -c Release -o /app/publish --no-restore -p:UseAppHost=false -p:SourceRevisionId=${SOURCE_REVISION_ID}
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS final
 WORKDIR /app

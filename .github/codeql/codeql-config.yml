@@ -1,4 +1,8 @@
 name: "Security and Quality"
-
 queries:
   - uses: security-and-quality
+# Build output and anything a build generates. paths-ignore applies because the analysis does not build.
+paths-ignore:
+  - '**/obj/**'
+  - '**/bin/**'
+  - '**/cdk.out/**'
