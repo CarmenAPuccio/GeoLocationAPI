@@ -111,12 +111,9 @@ public sealed class TelemetryTests : IClassFixture<GeoLocationApiFactory>
         };
         listener.SetMeasurementEventCallback<long>((_, value, tags, _) =>
         {
-            foreach (var tag in tags)
+            foreach (var tag in tags.ToArray().Where(t => t.Key == "geolocation.found"))
             {
-                if (tag.Key == "geolocation.found")
-                {
-                    measurements.Add((value, tag.Value));
-                }
+                measurements.Add((value, tag.Value));
             }
         });
         listener.Start();

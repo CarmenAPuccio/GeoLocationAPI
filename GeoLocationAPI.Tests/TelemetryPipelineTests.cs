@@ -67,19 +67,21 @@ public sealed class TelemetryPipelineTests : IDisposable
         return total;
     }
 
-    private static string[] TagKeys(Metric metric)
+    private static IEnumerable<KeyValuePair<string, object?>> TagsOf(Metric metric)
     {
-        var keys = new HashSet<string>();
         foreach (var point in metric.GetMetricPoints())
         {
             foreach (var tag in point.Tags)
             {
-                keys.Add(tag.Key);
+                yield return tag;
             }
         }
-
-        return [.. keys.Order()];
     }
+
+    private static string[] TagKeys(Metric metric) => [.. TagsOf(metric).Select(t => t.Key).Distinct().Order()];
+
+    private static List<string> TagValues(Metric metric, string key) =>
+        [.. TagsOf(metric).Where(t => t.Key == key).Select(t => t.Value?.ToString() ?? string.Empty)];
 
     [Fact]
     public async Task HealthChecks_AreNotTraced_ButApiRequestsAre()
@@ -127,17 +129,7 @@ public sealed class TelemetryPipelineTests : IDisposable
         Assert.Equal(["http.request.method", "http.response.status_code", "http.route"], TagKeys(duration));
 
         // The failing endpoints are visible by status code, including the health check.
-        var statuses = new List<string>();
-        foreach (var point in duration.GetMetricPoints())
-        {
-            foreach (var tag in point.Tags)
-            {
-                if (tag.Key == "http.response.status_code")
-                {
-                    statuses.Add(tag.Value?.ToString() ?? string.Empty);
-                }
-            }
-        }
+        var statuses = TagValues(duration, "http.response.status_code");
 
         Assert.Contains("200", statuses);
         Assert.Contains("400", statuses);
@@ -196,6 +188,21 @@ public sealed class TelemetryPipelineTests : IDisposable
     }
 
     [Fact]
+    public async Task HealthCheck_ReportsUnhealthyAndLogsTheException_WhenTheLookupThrows()
+    {
+        using var failing = new FailingLookupFactory();
+        var client = failing.CreateClient();
+
+        var response = await client.GetAsync("/hc");
+        failing.Flush();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var record = Assert.Single(failing.Logs, l => l.LogLevel == LogLevel.Error && l.Exception is InvalidOperationException);
+        Assert.Equal("database unavailable", record.Exception!.Message);
+        Assert.Equal("Microsoft.Extensions.Diagnostics.HealthChecks.DefaultHealthCheckService", record.CategoryName);
+    }
+
+    [Fact]
     public async Task UnhandledException_AddsErrorTypeToTheRequestMetric()
     {
         using var failing = new FailingLookupFactory();
@@ -205,17 +212,7 @@ public sealed class TelemetryPipelineTests : IDisposable
         failing.Flush();
 
         var duration = failing.Metrics.Last(m => m.Name == "http.server.request.duration");
-        var errorTypes = new List<string>();
-        foreach (var point in duration.GetMetricPoints())
-        {
-            foreach (var tag in point.Tags)
-            {
-                if (tag.Key == "error.type")
-                {
-                    errorTypes.Add(tag.Value?.ToString() ?? string.Empty);
-                }
-            }
-        }
+        var errorTypes = TagValues(duration, "error.type");
 
         Assert.Contains("System.InvalidOperationException", errorTypes);
     }

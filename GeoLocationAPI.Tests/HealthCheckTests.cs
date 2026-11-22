@@ -72,20 +72,14 @@ public class HealthCheckTests
     }
 
     [Fact]
-    public async Task Unhealthy_WhenLookupThrows()
+    public async Task LookupFailure_IsNotCaught_SoTheHealthCheckServiceCanReportItUnhealthy()
     {
         var failure = new InvalidOperationException("database unavailable");
-        var logger = new ListLogger();
-        var check = new GeoLocationHealthCheck(new StubService(_ => throw failure), logger, Settings("8.8.8.8"));
+        var check = new GeoLocationHealthCheck(new StubService(_ => throw failure), new ListLogger(), Settings("8.8.8.8"));
 
-        var result = await check.CheckHealthAsync(Context());
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => check.CheckHealthAsync(Context()));
 
-        Assert.Equal(HealthStatus.Unhealthy, result.Status);
-        Assert.Same(failure, result.Exception);
-
-        var entry = Assert.Single(logger.Entries);
-        Assert.Equal(LogLevel.Error, entry.Level);
-        Assert.Same(failure, entry.Exception);
+        Assert.Same(failure, thrown);
     }
 
     [Fact]

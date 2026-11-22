@@ -23,21 +23,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # Installs the SDK pinned in global.json, so the runner's default SDK does not matter.
+      # Installs the SDK pinned in global.json. The no-build analysis still restores packages with it.
       - name: Set up .NET
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
+      # build-mode none analyzes the source as written, without compiling. A build would also analyze code that
+      # source generators write at compile time (for example the OpenAPI XML comment support), which nobody
+      # maintains and which produced alerts that cannot be fixed.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: csharp
-          build-mode: manual
+          build-mode: none
           config-file: ./.github/codeql/codeql-config.yml
-
-      - name: Build
-        run: dotnet build GeoLocationAPI.sln --configuration Release
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4

@@ -281,7 +281,7 @@ sealed class CdkGeoLocationApiWafStack : NestedStack
         // AWS WAF WAF has particular requirements to the naming and format of Logging Destination configs as described and shown in their docs.
         // Specifically, the ARN of the Log Group cannot end in :* which unfortunately is the return value for a Log Group ARN in Cloudformation.
         // Configuring the WebACL Log configuration and formatting the ARN
-        CfnLoggingConfiguration geoLocationAPIWebACLLoggingConfiguration = new CfnLoggingConfiguration(this, "GeoLocationAPIWebACLLoggingConfiguration", new CfnLoggingConfigurationProps
+        new CfnLoggingConfiguration(this, "GeoLocationAPIWebACLLoggingConfiguration", new CfnLoggingConfigurationProps
         {
             LogDestinationConfigs = new[] {
                 Stack.Of(this).FormatArn(new ArnComponents
@@ -295,7 +295,7 @@ sealed class CdkGeoLocationApiWafStack : NestedStack
         });
 
         // Associate the WebAcl to ALB
-        CfnWebACLAssociation geoLocationAPIWebACLAssocation = new CfnWebACLAssociation(this, "GeoLocationAPIWebACLAssocation", new CfnWebACLAssociationProps
+        new CfnWebACLAssociation(this, "GeoLocationAPIWebACLAssocation", new CfnWebACLAssociationProps
         {
             ResourceArn = props.ALBResourceArn,
             WebAclArn = geoLocationAPIWAFWebACL.AttrArn

@@ -26,33 +26,22 @@ public sealed partial class GeoLocationHealthCheck : IHealthCheck
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var result = _geoLocationService.GetGeoLocation(_ipToTest);
-            var data = new Dictionary<string, object> { ["ipAddress"] = result.IPAddress };
+        // An exception from the lookup is not caught here. The health check service reports the check as Unhealthy
+        // and logs the exception at Error, which is what this class would otherwise do by hand.
+        var result = _geoLocationService.GetGeoLocation(_ipToTest);
+        var data = new Dictionary<string, object> { ["ipAddress"] = result.IPAddress };
 
-            if (result.IPFoundInGeoDB)
-            {
-                return Task.FromResult(HealthCheckResult.Healthy("The healthcheck is healthy - " + result.Message, data));
-            }
-
-            LogAddressNotFound(_ipToTest.ToString());
-            return Task.FromResult(new HealthCheckResult(context.Registration.FailureStatus,
-                "The healthcheck indicates an unhealthy result. " + result.Message, data: data));
-        }
-        catch (Exception ex)
+        if (result.IPFoundInGeoDB)
         {
-            LogLookupFailed(ex, _ipToTest.ToString());
-            return Task.FromResult(new HealthCheckResult(
-                context.Registration.FailureStatus,
-                "The healthcheck indicates an unhealthy result.",
-                ex));
+            return Task.FromResult(HealthCheckResult.Healthy("The healthcheck is healthy - " + result.Message, data));
         }
+
+        LogAddressNotFound(_ipToTest.ToString());
+        return Task.FromResult(new HealthCheckResult(context.Registration.FailureStatus,
+            "The healthcheck indicates an unhealthy result. " + result.Message, data: data));
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Health check failed: {IpAddress} was not found in the GeoDB")]
     private partial void LogAddressNotFound(string ipAddress);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Health check failed: the lookup of {IpAddress} threw an exception")]
-    private partial void LogLookupFailed(Exception exception, string ipAddress);
 }
